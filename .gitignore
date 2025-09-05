@@ -107,3 +107,4 @@ pids
 *.pid.lock
 .tern-port
 .yarn-integrity
+TextEditorPlan.md
