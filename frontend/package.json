@@ -11,7 +11,13 @@
     "start": "concurrently vite \"electron .\""
   },
   "dependencies": {
+    "@highlightjs/cdn-assets": "^11.11.1",
+    "@microsoft/signalr": "^9.0.6",
+    "@xterm/addon-fit": "^0.10.0",
+    "@xterm/xterm": "^5.5.0",
     "concurrently": "^9.2.1",
+    "markdown-it": "^14.1.0",
+    "material-symbols": "^0.35.0",
     "vue": "^3.5.21"
   },
   "devDependencies": {

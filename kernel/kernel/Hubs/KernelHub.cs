@@ -1,5 +1,6 @@
 ﻿namespace kernel.Hubs;
 using Microsoft.AspNetCore.SignalR;
+using System.Diagnostics;
 public class KernelHub : Hub
 {
     // 前端调用执行代码

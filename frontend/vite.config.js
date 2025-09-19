@@ -10,4 +10,13 @@ export default defineConfig({
             '@': fileURLToPath(new URL('./src', import.meta.url))
         },
     },
+    server: {
+        proxy: {
+            '/mdHub': {
+                target: 'http://localhost:5238',
+                ws: true,          // 支持 WebSocket
+                changeOrigin: true
+            }
+        }
+    }
 })
