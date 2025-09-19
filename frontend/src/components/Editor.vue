@@ -1,9 +1,9 @@
 ﻿<script setup lang="ts">
 // ==================== IMPORTS ====================
-import { ref, computed, watch, onMounted, nextTick, onBeforeUnmount } from 'vue'
+import {ref, computed, watch, onMounted, nextTick, onBeforeUnmount} from 'vue'
 import MarkdownIt from 'markdown-it'
-import { Terminal } from '@xterm/xterm'
-import { FitAddon } from '@xterm/addon-fit'
+import {Terminal} from '@xterm/xterm'
+import {FitAddon} from '@xterm/addon-fit'
 import '@xterm/xterm/css/xterm.css'
 import hljs from '@highlightjs/cdn-assets/es/highlight.js'
 import "@highlightjs/cdn-assets/styles/github-dark.css"
@@ -13,6 +13,20 @@ import * as signalR from "@microsoft/signalr"
 // Editor state management - stores lines of text as separate blocks
 const blocks = ref<string[]>(['']) // Array of text lines in the editor
 const textareas = ref([]) // References to textarea elements for focus management
+const activeIndexTop = ref(null) // Sidebar active state
+const activeIndexBottom = ref(null) // Sidebar active state
+const explorerVisible = ref(true) // Explorer sidebar visibility
+
+const buttonsTop = [
+    {icon: 'folder'},
+    {icon: 'search'},
+    {icon: 'account_circle'},
+]
+
+const buttonsBottom = [
+    {icon: 'play_arrow'},
+    {icon: 'terminal'},
+]
 
 // Terminal state management
 const terminal = ref(null) // Reference to terminal DOM element
@@ -209,7 +223,7 @@ const md = new MarkdownIt({
         // If language is specified and supported, use syntax highlighting
         if (lang && hljs.getLanguage(lang)) {
             return '<pre class="hljs"><code>' +
-                hljs.highlight(code, { language: lang, ignoreIllegals: true }).value +
+                hljs.highlight(code, {language: lang, ignoreIllegals: true}).value +
                 '</code></pre>'
         }
         // Fallback to plain code block
@@ -300,7 +314,7 @@ watch(blocks, (newVal) => {
     // Send updated content to backend via SignalR
     connection.invoke("ReceiveMarkdown", newVal)
         .catch(err => console.error('Error syncing markdown:', err.toString()))
-}, { deep: true }) // Deep watch to detect changes in array elements
+}, {deep: true}) // Deep watch to detect changes in array elements
 
 // ==================== LIFECYCLE HOOKS ====================
 /**
@@ -350,24 +364,23 @@ onBeforeUnmount(() => {
             <div class="tool-bar">
                 <!-- General action icons (top section) -->
                 <div class="general-action">
-                    <div class="badge">
-                        <span class="material-symbols-outlined">folder</span>
-                    </div>
-                    <div class="badge">
-                        <span class="material-symbols-outlined">search</span>
-                    </div>
-                    <div class="badge">
-                        <span class="material-symbols-outlined">account_circle</span>
+                    <div v-for="(item, index) in buttonsTop"
+                         :key="index"
+                         class="badge"
+                         :class="{ active: activeIndexTop === index }"
+                         @click="activeIndexTop = (activeIndexTop === index ? null : index)">
+                        <span class="material-symbols-outlined">{{ item.icon }}</span>
                     </div>
                 </div>
 
                 <!-- Code action icons (bottom section) -->
                 <div class="code-action">
-                    <div class="badge">
-                        <span class="material-symbols-outlined">play_arrow</span>
-                    </div>
-                    <div class="badge">
-                        <span class="material-symbols-outlined">terminal</span>
+                    <div v-for="(item, index) in buttonsBottom"
+                         :key="index"
+                         class="badge"
+                         :class="{ active: activeIndexBottom === index }"
+                         @click="activeIndexBottom = (activeIndexBottom === index ? null : index)">
+                        <span class="material-symbols-outlined">{{ item.icon }}</span>
                     </div>
                 </div>
             </div>
@@ -377,7 +390,7 @@ onBeforeUnmount(() => {
                 <div class="workspace">
 
                     <!-- File explorer sidebar -->
-                    <div class="view-content">
+                    <div class="view-content" v-show="explorerVisible">
                         <div class="content-title-bar">
                             <div class="title-label">
                                 <span>EXPLORER</span>
@@ -386,7 +399,8 @@ onBeforeUnmount(() => {
                                 <div class="title-action">
                                     <span class="material-symbols-outlined">add</span>
                                 </div>
-                                <div class="title-action">
+                                <div class="title-action"
+                                     @click="explorerVisible = false">
                                     <span class="material-symbols-outlined">collapse_content</span>
                                 </div>
                             </div>
@@ -400,7 +414,9 @@ onBeforeUnmount(() => {
                         <div class="tab-bar">
                             <div class="tab">
                                 <span>Untitled</span>
-                                <div class="tab-action close"></div>
+                                <div class="tab-action">
+                                    <span class="material-symbols-outlined">close</span>
+                                </div>
                             </div>
                         </div>
 
@@ -452,7 +468,7 @@ onBeforeUnmount(() => {
                 </div>
 
                 <!-- Bottom terminal panel -->
-                <div class="terminal-container">
+                <div class="terminal-container" v-show="activeIndexBottom === 1">
                     <div class="terminal-title-bar">
                         <div class="terminal-title">
                             <span>TERMINAL</span>
