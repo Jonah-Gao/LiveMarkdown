@@ -1,0 +1,413 @@
+/* ===========================================
+   CSS VARIABLES & RESET
+   =========================================== */
+:root {
+  --widget-border-color: #30363d;
+  --editor-font-size: 14px;
+  --accent-color: rgb(247, 129, 102);
+  --editor-line-height: 1.4em;
+  --bg-primary: #1e1e1e;
+  --bg-secondary: #0d1117;
+  --bg-tertiary: #010409;
+  --text-primary: #e6edf3;
+  --text-secondary: #7d8590;
+  --button-bg: #383838;
+  --button-hover: #26292c;
+  --button-active: #6b5aea;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+/* ===========================================
+   BASE STYLES
+   =========================================== */
+body {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  background-color: var(--bg-primary);
+  height: 100vh;
+  overflow: hidden;
+  color: var(--text-primary);
+}
+
+/* ===========================================
+   LAYOUT STRUCTURE
+   =========================================== */
+.window {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  width: 100vw;
+}
+
+.window-workspace {
+  flex: 1;
+  display: flex;
+  flex-direction: row;
+  overflow: hidden;
+}
+
+.workspace-wrapper {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.workspace {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+}
+
+/* ===========================================
+   SIDEBAR & TOOLBAR
+   =========================================== */
+.view-content {
+  display: block;
+  width: 216px;
+  border-right: 1px solid var(--widget-border-color);
+  background-color: var(--bg-tertiary);
+}
+
+.tool-bar {
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  border-right: solid 1px var(--widget-border-color);
+  width: 48px;
+  min-width: 48px;
+  background-color: var(--bg-secondary);
+  cursor: default;
+}
+
+.general-action {
+  grid-row: 1;
+}
+
+.code-action {
+  grid-row: 3;
+}
+
+.badge {
+  color: var(--text-secondary);
+  display: flex;
+  width: 48px;
+  height: 48px;
+  justify-content: center;
+  align-items: center;
+  cursor: pointer;
+  user-select: none;
+}
+
+.badge:hover {
+  color: var(--text-primary);
+}
+
+.badge.active {
+  color: var(--text-primary);
+  background-color: var(--button-hover);
+  box-shadow: inset 3px 0 0 0 var(--accent-color);
+}
+
+.badge span {
+  font-size: 28px;
+  font-variation-settings: 'FILL' 0, 'wght' 300, 'GRAD' 0, 'opsz' 28;
+}
+
+/* ===========================================
+   TITLE BARS & NAVIGATION
+   =========================================== */
+.title-bar {
+  top: 0;
+  height: 35px;
+  display: flex;
+  padding: 8px 12px;
+  background-color: var(--bg-tertiary);
+  border-bottom: 1px solid var(--widget-border-color);
+  gap: 10px;
+}
+
+.content-title-bar {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  height: 35px;
+  padding: 0 0 0 12px;
+  cursor: default;
+  user-select: none;
+}
+
+.title-label {
+  display: block;
+  grid-column: 1;
+  align-items: center;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.title-actions {
+  grid-column: 3;
+  display: flex;
+  flex-direction: row;
+}
+
+.title-action {
+  display: flex;
+  height: 25px;
+  width: 25px;
+  flex: 1;
+  margin: 0 6px 0 0;
+  text-align: center;
+  justify-content: center;
+  align-items: center;
+  cursor: pointer;
+  user-select: none;
+}
+
+.title-action:hover {
+  background-color: var(--button-hover);
+  border-radius: 4px;
+}
+
+.title-action span {
+  font-size: 22px;
+  font-variation-settings: 'FILL' 0, 'wght' 300, 'GRAD' 0, 'opsz' 22;
+}
+
+/* ===========================================
+   TABS
+   =========================================== */
+.tab-bar {
+  display: flex;
+  height: 35px;
+  background-color: var(--bg-tertiary);
+  border-bottom: 1px solid var(--widget-border-color);
+}
+
+.tab {
+  display: flex;
+  justify-content: space-between;
+  height: 100%;
+  align-items: center;
+  align-content: center;
+  font-size: 12px;
+  border-right: 1px solid var(--widget-border-color);
+  cursor: pointer;
+}
+
+.tab span {
+  margin-left: 14px;
+}
+
+.tab-action {
+  display: flex;
+  height: 18px;
+  width: 18px;
+  margin: 0 8px;
+  justify-content: center;
+  align-items: center;
+  cursor: pointer;
+  user-select: none;
+}
+
+.tab-action:hover {
+  background-color: var(--button-hover);
+  border-radius: 4px;
+}
+
+
+.tab-action span {
+  margin-left: 0;
+  font-size: 18px;
+  font-variation-settings: 'FILL' 0, 'wght' 300, 'GRAD' 0, 'opsz' 18;
+}
+
+/* ===========================================
+   BUTTONS & CONTROLS
+   =========================================== */
+button {
+  margin-right: 0;
+  padding: 4px 10px;
+  background-color: var(--button-bg);
+  border: 1px solid var(--widget-border-color);
+  border-radius: 4px;
+  cursor: pointer;
+  color: var(--text-primary);
+  transition: all 0.2s ease;
+  font-size: 12px;
+  font-family: inherit;
+}
+
+button:hover {
+  background-color: var(--button-hover);
+  border-color: var(--button-active);
+}
+
+button:active {
+  background-color: var(--button-active);
+  color: #ffffff;
+}
+
+.file-operations,
+.edit-operations,
+.format-operations {
+  display: flex;
+  margin-right: 20px;
+  gap: 6px;
+}
+
+/* ===========================================
+   EDITOR CONTAINER & LAYOUT
+   =========================================== */
+.editor-container {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  background-color: var(--bg-secondary);
+}
+
+.editor {
+  display: flex;
+  flex: 1;
+  flex-direction: row;
+  overflow: hidden;
+}
+
+.editor-main {
+  display: flex;
+  width: 50%;
+  border-right: 1px solid var(--widget-border-color);
+}
+
+/* ===========================================
+   PREVIEW PANEL
+   =========================================== */
+.preview-main {
+  display: flex;
+  flex-direction: column;
+  width: 50%;
+  border-right: 1px solid var(--widget-border-color);
+  overflow-y: auto;
+}
+
+.markdown-body {
+  width: 100%;
+  height: 100%;
+  display: block;
+  padding: 26px 66px 0 66px;
+  overflow-y: auto;
+}
+
+/* ===========================================
+   TERMINAL
+   =========================================== */
+.terminal-container {
+  display: flex;
+  flex-direction: column;
+  height: 250px;
+  min-height: 150px;
+  max-height: 50vh;
+  background-color: var(--bg-tertiary);
+  border-top: 1px solid var(--widget-border-color);
+  overflow: hidden;
+}
+
+.terminal-title-bar {
+  display: flex;
+  height: 35px;
+  padding: 0 8px;
+  font-size: 12px;
+  align-items: center;
+  cursor: default;
+  user-select: none;
+  flex-shrink: 0;
+}
+
+.terminal-title {
+  padding: 2px 10px;
+}
+
+.terminal-title span {
+  padding: 3px 2px;
+  box-shadow: inset 0 -1px var(--accent-color);
+}
+
+#terminal {
+  flex: 1;
+  overflow: hidden;
+}
+
+.terminal.xterm {
+  padding: 0 20px 1em;
+  height: 100%;
+}
+
+/* ===========================================
+   STATUS BAR
+   =========================================== */
+.status-bar {
+  height: 22px;
+  background-color: var(--bg-secondary);
+  border-top: 1px solid var(--widget-border-color);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0 12px;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+/* ===========================================
+   SELECTION & INTERACTIVE ELEMENTS
+   =========================================== */
+::selection {
+  background-color: rgba(107, 90, 234, 0.3);
+}
+
+#editor-textarea::placeholder {
+  color: #666;
+  opacity: 0.8;
+}
+
+/* ===========================================
+   SCROLLBAR STYLING
+   =========================================== */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--bg-secondary);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--text-secondary);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--text-primary);
+}
+
+/* ===========================================
+   RESPONSIVE DESIGN
+   =========================================== */
+@media (max-width: 768px) {
+  .editor-main,
+  .preview-main {
+    width: 100%;
+  }
+
+  .view-content {
+    width: 180px;
+  }
+
+  .tool-bar {
+    width: 40px;
+    min-width: 40px;
+  }
+}
