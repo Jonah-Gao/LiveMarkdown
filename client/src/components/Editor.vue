@@ -202,6 +202,7 @@ async function loadFileTree() {
         fileTree.value = [{
             name: window.nodePath.basename(rootDirectory.value),
             path: rootDirectory.value,
+            extension: '',
             isDirectory: true,
             expanded: true,
             children: await window.fileAPI.readDir(rootDirectory.value)
