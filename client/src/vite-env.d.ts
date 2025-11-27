@@ -3,6 +3,7 @@
 interface FileNode {
     name: string
     path: string
+    extension: string
     isDirectory: boolean
     children?: FileNode[]
     expanded?: boolean
@@ -28,6 +29,7 @@ export interface INodePathAPI {
 }
 
 export interface ITerminalAPI {
+    init: () => void
     input: (data: string) => void
     onOutput: (callback: (data: string) => void) => void
 }

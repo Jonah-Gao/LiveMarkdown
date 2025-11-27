@@ -30,6 +30,7 @@ contextBridge.exposeInMainWorld("nodePath", {
   basename: (p, ext) => path.basename(p, ext)
 });
 contextBridge.exposeInMainWorld("terminal", {
+  init: () => ipcRenderer.send("terminal-init"),
   input: (data) => ipcRenderer.send("terminal-input", data),
   onOutput: (callback) => ipcRenderer.on("terminal-output", (_event, data) => callback(data))
 });

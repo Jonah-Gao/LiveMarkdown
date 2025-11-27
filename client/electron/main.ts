@@ -8,18 +8,10 @@ import os from "os";
 
 // const require = createRequire(import.meta.url)
 const __dirname: string = path.dirname(fileURLToPath(import.meta.url));
-const shell: string = os.platform() === "win32" ? "powershell.exe" : "bash";
-const ptyProcess = pty.spawn(shell, [], {
-    name: 'xterm-color',
-    cols: 80,
-    rows: 30,
-    cwd: process.env.HOME,
-    env: process.env
-});
-
 interface FileNode {
     name: string
     path: string
+    extension: string
     isDirectory: boolean
     children?: FileNode[]
     expanded?: boolean
@@ -33,7 +25,11 @@ interface Tab {
     isDirty: boolean
 }
 
+let ptyProcess: pty.IPty | null;
+
+
 // The built directory structure
+
 //
 // ├─┬─┬ dist
 // │ │ └── index.html
@@ -43,16 +39,16 @@ interface Tab {
 // │ │ └── preload.mjs
 // │
 process.env.APP_ROOT = path.join(__dirname, '..')
-
 // 🚧 Use ['ENV_NAME'] avoid vite:define plugin - Vite@2.x
+
 export const VITE_DEV_SERVER_URL = process.env['VITE_DEV_SERVER_URL']
 export const RENDERER_DIST = path.join(process.env.APP_ROOT, 'dist')
-
 process.env.VITE_PUBLIC = VITE_DEV_SERVER_URL ? path.join(process.env.APP_ROOT, 'public') : RENDERER_DIST
 
 let win: BrowserWindow | null
 
 async function createWindow(): Promise<void> {
+
     win = new BrowserWindow({
         width: 1200,
         height: 800,
@@ -64,21 +60,21 @@ async function createWindow(): Promise<void> {
         },
         icon: path.join(process.env.VITE_PUBLIC ?? "", 'electron-vite.svg'),
     })
-
     // Test active push message to Renderer-process.
+
     win.webContents.on('did-finish-load', () => {
         win?.webContents.send('main-process-message', (new Date).toLocaleString())
     })
-
     if (VITE_DEV_SERVER_URL) {
+
         await win.loadURL(VITE_DEV_SERVER_URL)
     } else {
         // win.loadFile('dist/index.html')
         await win.loadFile(path.join(RENDERER_DIST, 'index.html'))
     }
 }
-
 // Quit when all windows are closed, except on macOS. There, it's common
+
 // for applications and their menu bar to stay active until the user quits
 // explicitly with Cmd + Q.
 app.on('window-all-closed', () => {
@@ -87,7 +83,6 @@ app.on('window-all-closed', () => {
         win = null
     }
 })
-
 app.on('activate', async () => {
     // On OS X it's common to re-create a window in the app when the
     // dock icon is clicked and there are no other windows open.
@@ -102,12 +97,14 @@ ipcMain.handle('read-dir', async (_event: Electron.IpcMainInvokeEvent, dirPath: 
         const nodes: FileNode[] = []
 
         for (const entry of entries) {
+            const extension: string = path.extname(entry.name).slice(1)
             const fullPath = path.join(dirPath, entry.name)
             try {
                 // 直接使用 entry.isDirectory()，不需要额外的 stat() 调用
                 const node: FileNode = {
                     name: entry.name,
                     path: fullPath,
+                    extension: extension,
                     isDirectory: entry.isDirectory(),
                     expanded: false
                 }
@@ -141,22 +138,35 @@ ipcMain.handle('create-tab', async (_event: Electron.IpcMainInvokeEvent, name: s
     }
 })
 
+ipcMain.on('terminal-init', (_event: Electron.IpcMainEvent) => {
+    const shell: string = os.platform() === "win32" ? "powershell.exe" : "bash";
+    ptyProcess = pty.spawn(shell, [], {
+        name: 'xterm-color',
+        cols: 80,
+        rows: 30,
+        cwd: process.env.HOME,
+        env: process.env
+    });
+
+    ptyProcess.onData((data) => {
+        console.log("[debug] terminal output:", data.toString());
+        win?.webContents.send('terminal-output', data);
+    })
+})
+
 ipcMain.on('terminal-input', (_event: Electron.IpcMainEvent, data: string) => {
     console.log("[debug] terminal input:", data);
-    ptyProcess.write(data);
+    if (ptyProcess) {
+        ptyProcess.write(data);
+    }
 })
 
-ptyProcess.onData((data) => {
-    console.log("[debug] terminal output:", data.toString());
-    win?.webContents.send('terminal-output', data);
-})
-
-ptyProcess.onData((data) => {
-    win?.webContents.send('terminal-output', data);
-})
 
 ipcMain.on('terminal-resize', (_event: Electron.IpcMainEvent, size: { cols: number, rows: number }) => {
-    ptyProcess.resize(size.cols, size.rows);
+    if (ptyProcess){
+        ptyProcess.resize(size.cols, size.rows);
+    }
 })
+
 
 app.whenReady().then(createWindow)

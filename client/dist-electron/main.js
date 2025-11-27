@@ -5,14 +5,7 @@ import fs from "fs";
 import * as pty from "@lydell/node-pty";
 import os from "os";
 const __dirname$1 = path.dirname(fileURLToPath(import.meta.url));
-const shell = os.platform() === "win32" ? "powershell.exe" : "bash";
-const ptyProcess = pty.spawn(shell, [], {
-  name: "xterm-color",
-  cols: 80,
-  rows: 30,
-  cwd: process.env.HOME,
-  env: process.env
-});
+let ptyProcess;
 process.env.APP_ROOT = path.join(__dirname$1, "..");
 const VITE_DEV_SERVER_URL = process.env["VITE_DEV_SERVER_URL"];
 const RENDERER_DIST = path.join(process.env.APP_ROOT, "dist");
@@ -55,11 +48,13 @@ ipcMain.handle("read-dir", async (_event, dirPath) => {
     const entries = await fs.promises.readdir(dirPath, { withFileTypes: true });
     const nodes = [];
     for (const entry of entries) {
+      const extension = path.extname(entry.name).slice(1);
       const fullPath = path.join(dirPath, entry.name);
       try {
         const node = {
           name: entry.name,
           path: fullPath,
+          extension,
           isDirectory: entry.isDirectory(),
           expanded: false
         };
@@ -88,19 +83,30 @@ ipcMain.handle("create-tab", async (_event, name, path2) => {
     isDirty: false
   };
 });
+ipcMain.on("terminal-init", (_event) => {
+  const shell = os.platform() === "win32" ? "powershell.exe" : "bash";
+  ptyProcess = pty.spawn(shell, [], {
+    name: "xterm-color",
+    cols: 80,
+    rows: 30,
+    cwd: process.env.HOME,
+    env: process.env
+  });
+  ptyProcess.onData((data) => {
+    console.log("[debug] terminal output:", data.toString());
+    win == null ? void 0 : win.webContents.send("terminal-output", data);
+  });
+});
 ipcMain.on("terminal-input", (_event, data) => {
   console.log("[debug] terminal input:", data);
-  ptyProcess.write(data);
-});
-ptyProcess.onData((data) => {
-  console.log("[debug] terminal output:", data.toString());
-  win == null ? void 0 : win.webContents.send("terminal-output", data);
-});
-ptyProcess.onData((data) => {
-  win == null ? void 0 : win.webContents.send("terminal-output", data);
+  if (ptyProcess) {
+    ptyProcess.write(data);
+  }
 });
 ipcMain.on("terminal-resize", (_event, size) => {
-  ptyProcess.resize(size.cols, size.rows);
+  if (ptyProcess) {
+    ptyProcess.resize(size.cols, size.rows);
+  }
 });
 app.whenReady().then(createWindow);
 export {

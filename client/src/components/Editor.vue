@@ -15,6 +15,7 @@ import FileTreeNode from './FileTreeNode.vue'
 interface FileNode {
     name: string
     path: string
+    extension: string
     isDirectory: boolean
     children?: FileNode[]
     expanded?: boolean
@@ -62,13 +63,6 @@ const SIDEBAR_BUTTONS = {
     ]
 }
 
-const TERMINAL_KEYS = {
-    ESC: 27,
-    ENTER: 13,
-    BACKSPACE: 127,
-    DELETE: 8
-}
-
 // ==================== STATE ====================
 // UI State
 const activeIndexTop = ref<number | null>(0)
@@ -90,14 +84,12 @@ const activeTabIndex = ref(0)
 
 // File Explorer State
 const fileTree = ref<FileNode[]>([])
-const rootDirectory = ref('E:\\CS_NEA_Project\\my-app')
+const rootDirectory = ref('E:\\CS_NEA_Project\\client')
 
 // Terminal State
 const terminal = ref<HTMLElement | null>(null)
 let xterm: Terminal
 let fitAddon: FitAddon
-let terminalInput = ''
-let terminalCursor = 0
 
 // ==================== SIGNALR CONNECTIONS ====================
 const connection = new signalR.HubConnectionBuilder()
@@ -126,12 +118,6 @@ const showExplorer = computed(() => activeIndexTop.value === 0 && explorerVisibl
 const showTerminal = computed(() => activeIndexBottom.value === 1)
 
 // ==================== TERMINAL HANDLERS ====================
-// terminalConnection.on('ReceiveOutput', (output: string) => {
-//     if (xterm) {
-//         xterm.write(output + '\r\n')
-//     }
-// })
-
 window.terminal.onOutput((output: string) => {
     if (xterm) {
         xterm.write(output)
@@ -145,89 +131,13 @@ function initializeTerminal() {
     xterm.loadAddon(fitAddon)
     xterm.open(terminal.value!)
     fitAddon.fit()
-    xterm.writeln('Welcome to xterm.js + Vue.js!')
-
-    setupTerminalInput()
-}
-
-function setupTerminalInput() {
+    // xterm.writeln('Welcome to xterm.js + Vue.js!')
+    window.terminal.input("");
+    // setupTerminalInput()
+    window.terminal.init()
     xterm.onData(data => {
-        const code = data.charCodeAt(0)
-
-        if (code === TERMINAL_KEYS.ESC) {
-            handleEscapeSequence(data)
-        } else if (code === TERMINAL_KEYS.ENTER) {
-            handleEnterKey()
-        } else if (code === TERMINAL_KEYS.BACKSPACE || code === TERMINAL_KEYS.DELETE) {
-            handleBackspace()
-        } else {
-            handlePrintableCharacter(data)
-        }
+        window.terminal.input(data);
     })
-}
-
-function handleEscapeSequence(data: string) {
-    const sequence = data.substring(1)
-
-    switch (sequence) {
-        case '[C': // Right arrow
-            if (terminalCursor < terminalInput.length) {
-                terminalCursor++
-                xterm.write('\x1b[C')
-            }
-            break
-        case '[D': // Left arrow
-            if (terminalCursor > 0) {
-                terminalCursor--
-                xterm.write('\x1b[D')
-            }
-            break
-        case '[H': // Home
-            xterm.write('\x1b[D'.repeat(terminalCursor))
-            terminalCursor = 0
-            break
-        case '[F': // End
-            xterm.write('\x1b[C'.repeat(terminalInput.length - terminalCursor))
-            terminalCursor = terminalInput.length
-            break
-    }
-}
-
-function handleEnterKey() {
-    // terminalConnection.invoke('SendCommand', terminalInput)
-    //     .catch(err => console.error('Error sending command:', err))
-    window.terminal.input(terminalInput)
-
-    xterm.write('\r\n')
-    terminalInput = ''
-    terminalCursor = 0
-}
-
-function handleBackspace() {
-    if (terminalCursor > 0) {
-        terminalInput = terminalInput.slice(0, terminalCursor - 1) + terminalInput.slice(terminalCursor)
-        terminalCursor--
-        xterm.write('\b \b')
-
-        if (terminalCursor < terminalInput.length) {
-            const remainingText = terminalInput.slice(terminalCursor)
-            xterm.write(remainingText + ' ')
-            xterm.write('\x1b[D'.repeat(remainingText.length + 1))
-        }
-    }
-}
-
-function handlePrintableCharacter(data: string) {
-    terminalInput = terminalInput.slice(0, terminalCursor) + data + terminalInput.slice(terminalCursor)
-    xterm.write(data)
-
-    if (terminalCursor < terminalInput.length - 1) {
-        const remainingText = terminalInput.slice(terminalCursor + 1)
-        xterm.write(remainingText)
-        xterm.write('\x1b[D'.repeat(remainingText.length))
-    }
-
-    terminalCursor++
 }
 
 function handleResize() {

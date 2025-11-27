@@ -4,6 +4,7 @@ import {defineProps} from 'vue'
 interface FileNode {
     name: string
     path: string
+    extension: string
     isDirectory: boolean
     children?: FileNode[]
     expanded?: boolean
@@ -14,6 +15,36 @@ interface Props {
 }
 
 defineProps<Props>()
+
+type IconKey = keyof typeof icons;
+
+const icons = {
+    folder: 'folder',
+    file: 'code',
+    json: 'data_object',
+    javascript: 'javascript',
+    markdown: 'markdown',
+    image: 'image',
+    csv: 'csv',
+    database: 'database',
+    arrowDown: 'keyboard_arrow_down',
+    arrowRight: 'keyboard_arrow_right',
+} as const
+
+const categoryMap: Partial<Record<IconKey, string[]>> = {
+    image: ['png', 'jpg', 'jpeg', 'gif', 'svg', 'bmp', 'webp'],
+    json: ['json'],
+    javascript: ['js', 'jsx', 'mjs', 'cjs', 'ts', 'tsx'], // 补上了 ts
+    markdown: ['md', 'mdx'],
+    csv: ['csv'],
+    database: ['db', 'sqlite', 'sqlite3', 'sql'],
+};
+
+const extensionIndex = new Map<string, IconKey>();
+
+Object.entries(categoryMap).forEach(([category, extensions]) => {
+    extensions.forEach(ext => extensionIndex.set(ext, category as keyof typeof icons));
+});
 
 const emit = defineEmits<{
     toggleFolder: [node: FileNode]
@@ -39,19 +70,19 @@ function handleClick(node: FileNode) {
                 v-if="node.isDirectory"
                 class="material-symbols-outlined folder-arrow"
             >
-                {{ node.expanded ? 'keyboard_arrow_down' : 'keyboard_arrow_right' }}
+                {{ node.expanded ? icons.arrowDown : icons.arrowRight }}
             </span>
             <span
                 v-if="node.isDirectory"
                 class="material-symbols-outlined folder-icon"
             >
-                folder
+                {{ icons.folder }}
             </span>
             <span
                 v-else
                 class="material-symbols-outlined file-icon"
             >
-                code
+                {{ icons[extensionIndex.get(node.extension) ?? 'file' as keyof typeof icons] }}
             </span>
             <span class="file-name">{{ node.name }}</span>
         </div>
