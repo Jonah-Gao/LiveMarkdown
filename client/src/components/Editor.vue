@@ -387,6 +387,7 @@ onBeforeUnmount(() => {
                             </div>
 
                             <div class="preview-main">
+                                <div class="preview-header">Preview</div>
                                 <div class="markdown-body" v-html="renderedHtml"></div>
                             </div>
                         </div>
@@ -397,7 +398,7 @@ onBeforeUnmount(() => {
                 <div v-show="showTerminal" class="terminal-container">
                     <div class="terminal-title-bar">
                         <div class="terminal-title">
-                            <span>TERMINAL</span>
+                            <span>Terminal</span>
                         </div>
                     </div>
                     <div id="terminal" ref="terminal"></div>
@@ -406,13 +407,32 @@ onBeforeUnmount(() => {
         </div>
 
         <!-- Status Bar -->
-        <div class="status-bar"></div>
+        <div class="status-bar">
+            <div class="status-bar-left">
+                <div class="status-item">
+                    <span class="status-indicator"></span>
+                    <span>Ready</span>
+                </div>
+                <div class="status-item">
+                    <span class="material-symbols-outlined">description</span>
+                    <span>{{ tabs[activeTabIndex]?.name || 'Untitled' }}</span>
+                </div>
+            </div>
+            <div class="status-bar-right">
+                <div class="status-item">
+                    <span>Markdown</span>
+                </div>
+                <div class="status-item">
+                    <span>UTF-8</span>
+                </div>
+            </div>
+        </div>
     </div>
 </template>
 
 <style scoped>
 .file-explorer {
-    font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans", Helvetica, Arial, sans-serif;
     color: var(--text-primary);
     padding: 0;
     overflow-y: auto;
