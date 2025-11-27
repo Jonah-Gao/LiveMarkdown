@@ -432,7 +432,7 @@ onBeforeUnmount(() => {
 
 <style scoped>
 .file-explorer {
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans", Helvetica, Arial, sans-serif;
+    font-family: inherit;
     color: var(--text-primary);
     padding: 0;
     overflow-y: auto;

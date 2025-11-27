@@ -130,7 +130,7 @@ function handleClick(node: FileNode) {
 .folder-arrow {
     font-size: 16px;
     margin-right: 2px;
-    color: var(--text-muted, #6e7681);
+    color: var(--text-muted);
     font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 16;
     flex-shrink: 0;
     transition: transform 0.15s ease;
@@ -139,7 +139,7 @@ function handleClick(node: FileNode) {
 .folder-icon {
     font-size: 16px;
     margin-right: 6px;
-    color: #8b949e;
+    color: var(--text-secondary);
     font-variation-settings: 'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 16;
     flex-shrink: 0;
 }
@@ -148,14 +148,14 @@ function handleClick(node: FileNode) {
     font-size: 16px;
     margin-left: 18px;
     margin-right: 6px;
-    color: #8b949e;
+    color: var(--text-secondary);
     font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 16;
     flex-shrink: 0;
 }
 
 .file-name {
     font-weight: 400;
-    color: var(--text-primary, #e6edf3);
+    color: var(--text-primary);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;

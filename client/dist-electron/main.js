@@ -1,115 +1,89 @@
-import { app, BrowserWindow, ipcMain } from "electron";
-import { fileURLToPath } from "node:url";
-import path from "node:path";
-import fs from "fs";
-import * as pty from "@lydell/node-pty";
-import os from "os";
-const __dirname$1 = path.dirname(fileURLToPath(import.meta.url));
-let ptyProcess;
-process.env.APP_ROOT = path.join(__dirname$1, "..");
-const VITE_DEV_SERVER_URL = process.env["VITE_DEV_SERVER_URL"];
-const RENDERER_DIST = path.join(process.env.APP_ROOT, "dist");
-process.env.VITE_PUBLIC = VITE_DEV_SERVER_URL ? path.join(process.env.APP_ROOT, "public") : RENDERER_DIST;
-let win;
-async function createWindow() {
-  win = new BrowserWindow({
+import { app as p, BrowserWindow as w, ipcMain as a } from "electron";
+import { fileURLToPath as v } from "node:url";
+import r from "node:path";
+import u from "fs";
+import * as E from "@lydell/node-pty";
+import R from "os";
+const h = r.dirname(v(import.meta.url));
+let s;
+process.env.APP_ROOT = r.join(h, "..");
+const d = process.env.VITE_DEV_SERVER_URL, y = r.join(process.env.APP_ROOT, "dist");
+process.env.VITE_PUBLIC = d ? r.join(process.env.APP_ROOT, "public") : y;
+let o;
+async function _() {
+  o = new w({
     width: 1200,
     height: 800,
     webPreferences: {
-      preload: path.join(__dirname$1, "preload.mjs"),
-      contextIsolation: true,
-      nodeIntegration: false,
-      sandbox: false
+      preload: r.join(h, "preload.mjs"),
+      contextIsolation: !0,
+      nodeIntegration: !1,
+      sandbox: !1
     },
-    icon: path.join(process.env.VITE_PUBLIC ?? "", "electron-vite.svg")
-  });
-  win.webContents.on("did-finish-load", () => {
-    win == null ? void 0 : win.webContents.send("main-process-message", (/* @__PURE__ */ new Date()).toLocaleString());
-  });
-  if (VITE_DEV_SERVER_URL) {
-    await win.loadURL(VITE_DEV_SERVER_URL);
-  } else {
-    await win.loadFile(path.join(RENDERER_DIST, "index.html"));
-  }
+    icon: r.join(process.env.VITE_PUBLIC ?? "", "electron-vite.svg")
+  }), o.webContents.on("did-finish-load", () => {
+    o == null || o.webContents.send("main-process-message", (/* @__PURE__ */ new Date()).toLocaleString());
+  }), d ? await o.loadURL(d) : await o.loadFile(r.join(y, "index.html"));
 }
-app.on("window-all-closed", () => {
-  if (process.platform !== "darwin") {
-    app.quit();
-    win = null;
-  }
+p.on("window-all-closed", () => {
+  process.platform !== "darwin" && (p.quit(), o = null);
 });
-app.on("activate", async () => {
-  if (BrowserWindow.getAllWindows().length === 0) {
-    await createWindow();
-  }
+p.on("activate", async () => {
+  w.getAllWindows().length === 0 && await _();
 });
-ipcMain.handle("read-dir", async (_event, dirPath) => {
+a.handle("read-dir", async (c, e) => {
   try {
-    const entries = await fs.promises.readdir(dirPath, { withFileTypes: true });
-    const nodes = [];
-    for (const entry of entries) {
-      const extension = path.extname(entry.name).slice(1);
-      const fullPath = path.join(dirPath, entry.name);
+    const n = await u.promises.readdir(e, { withFileTypes: !0 }), l = [];
+    for (const t of n) {
+      const i = r.extname(t.name).slice(1), f = r.join(e, t.name);
       try {
-        const node = {
-          name: entry.name,
-          path: fullPath,
-          extension,
-          isDirectory: entry.isDirectory(),
-          expanded: false
+        const m = {
+          name: t.name,
+          path: f,
+          extension: i,
+          isDirectory: t.isDirectory(),
+          expanded: !1
         };
-        nodes.push(node);
-      } catch (e) {
-        console.error("Error processing file:", fullPath, e);
+        l.push(m);
+      } catch (m) {
+        console.error("Error processing file:", f, m);
       }
     }
-    return nodes.sort((a, b) => {
-      if (a.isDirectory && !b.isDirectory) return -1;
-      if (!a.isDirectory && b.isDirectory) return 1;
-      return a.name.localeCompare(b.name);
-    });
-  } catch (err) {
-    console.error("Error reading directory:", dirPath, err);
-    return [];
+    return l.sort((t, i) => t.isDirectory && !i.isDirectory ? -1 : !t.isDirectory && i.isDirectory ? 1 : t.name.localeCompare(i.name));
+  } catch (n) {
+    return console.error("Error reading directory:", e, n), [];
   }
 });
-ipcMain.handle("create-tab", async (_event, name, path2) => {
-  const content = await fs.promises.readFile(path2, "utf-8");
+a.handle("create-tab", async (c, e, n) => {
+  const l = await u.promises.readFile(n, "utf-8");
   return {
     id: `file-${Date.now()}`,
-    name,
-    path: path2,
-    content,
-    isDirty: false
+    name: e,
+    path: n,
+    content: l,
+    isDirty: !1
   };
 });
-ipcMain.on("terminal-init", (_event) => {
-  const shell = os.platform() === "win32" ? "powershell.exe" : "bash";
-  ptyProcess = pty.spawn(shell, [], {
+a.on("terminal-init", (c) => {
+  const e = R.platform() === "win32" ? "powershell.exe" : "bash";
+  s = E.spawn(e, [], {
     name: "xterm-color",
     cols: 80,
     rows: 30,
     cwd: process.env.HOME,
     env: process.env
-  });
-  ptyProcess.onData((data) => {
-    console.log("[debug] terminal output:", data.toString());
-    win == null ? void 0 : win.webContents.send("terminal-output", data);
+  }), s.onData((n) => {
+    console.log("[debug] terminal output:", n.toString()), o == null || o.webContents.send("terminal-output", n);
   });
 });
-ipcMain.on("terminal-input", (_event, data) => {
-  console.log("[debug] terminal input:", data);
-  if (ptyProcess) {
-    ptyProcess.write(data);
-  }
+a.on("terminal-input", (c, e) => {
+  console.log("[debug] terminal input:", e), s && s.write(e);
 });
-ipcMain.on("terminal-resize", (_event, size) => {
-  if (ptyProcess) {
-    ptyProcess.resize(size.cols, size.rows);
-  }
+a.on("terminal-resize", (c, e) => {
+  s && s.resize(e.cols, e.rows);
 });
-app.whenReady().then(createWindow);
+p.whenReady().then(_);
 export {
-  RENDERER_DIST,
-  VITE_DEV_SERVER_URL
+  y as RENDERER_DIST,
+  d as VITE_DEV_SERVER_URL
 };
