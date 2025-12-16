@@ -10,6 +10,7 @@ import 'highlight.js/styles/github-dark.css'
 import * as signalR from '@microsoft/signalr'
 import {CodeEditor} from 'monaco-editor-vue3'
 import FileTreeNode from './FileTreeNode.vue'
+import {MarkdownParser} from '@markdown/markdown'
 
 // ==================== TYPES ====================
 interface FileNode {

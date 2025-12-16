@@ -44,4 +44,10 @@ export default defineConfig({
                 : {},
         }),
     ],
+    resolve: {
+        alias: {
+            "@markdown": path.resolve(__dirname, "markdown"),
+        },
+    }
+
 })
