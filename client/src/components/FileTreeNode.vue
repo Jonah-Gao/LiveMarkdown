@@ -111,39 +111,45 @@ function handleClick(node: FileNode) {
 .file-node-content {
     display: flex;
     align-items: center;
-    padding: 4px 8px 4px 12px;
+    padding: 5px 8px 5px 12px;
     cursor: pointer;
     border-radius: 4px;
-    transition: background-color 0.15s ease;
+    margin: 1px 4px;
+    transition: background-color 0.1s ease;
     font-size: 13px;
 }
 
 .file-node-content:hover {
-    background-color: rgba(255, 255, 255, 0.05);
+    background-color: rgba(255, 255, 255, 0.06);
+}
+
+.file-node-content:active {
+    background-color: rgba(255, 255, 255, 0.08);
 }
 
 .folder-arrow {
-    font-size: 18px;
+    font-size: 16px;
     margin-right: 2px;
-    color: var(--text-secondary);
-    font-variation-settings: 'FILL' 0, 'wght' 300, 'GRAD' 0, 'opsz' 18;
+    color: var(--text-muted);
+    font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 16;
     flex-shrink: 0;
+    transition: transform 0.15s ease;
 }
 
 .folder-icon {
-    font-size: 18px;
+    font-size: 16px;
     margin-right: 6px;
     color: var(--text-secondary);
-    font-variation-settings: 'FILL' 0, 'wght' 300, 'GRAD' 0, 'opsz' 18;
+    font-variation-settings: 'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 16;
     flex-shrink: 0;
 }
 
 .file-icon {
-    font-size: 18px;
-    margin-left: 20px;
+    font-size: 16px;
+    margin-left: 18px;
     margin-right: 6px;
     color: var(--text-secondary);
-    font-variation-settings: 'FILL' 0, 'wght' 300, 'GRAD' 0, 'opsz' 18;
+    font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 16;
     flex-shrink: 0;
 }
 
@@ -156,7 +162,7 @@ function handleClick(node: FileNode) {
 }
 
 .file-children {
-    padding-left: 16px;
+    padding-left: 12px;
 }
 </style>
 

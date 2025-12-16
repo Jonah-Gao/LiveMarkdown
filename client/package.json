@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "vite",
     "build": "vue-tsc && vite build && electron-builder",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test": "vitest"
   },
   "dependencies": {
     "@lydell/node-pty": "^1.1.0",
@@ -28,6 +29,7 @@
     "vite": "^5.1.6",
     "vite-plugin-electron": "^0.28.6",
     "vite-plugin-electron-renderer": "^0.14.5",
+    "vitest": "^4.0.16",
     "vue-tsc": "^2.0.26"
   },
   "main": "dist-electron/main.js"
