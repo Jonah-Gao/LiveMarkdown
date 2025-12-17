@@ -3,32 +3,44 @@ import {Parser} from './parser';
 import {Renderer} from './renderer';
 import {Preprocessor} from "./preprocessor.ts";
 
+/**
+ * Main class for the Markdown parser.
+ * Orchestrates the parsing process by coordinating the Preprocessor, Lexer, Parser, and Renderer.
+ */
 class MarkdownParser {
     private preprocessor = new Preprocessor();
     private lexer = new Lexer();
     private parser = new Parser();
     private renderer = new Renderer();
 
-    parse(input: string): string {
+    /**
+     * Converts a markdown string into an HTML string.
+     *
+     * The process involves:
+     * 1. Preprocessing: Normalizing the input (e.g., line endings).
+     * 2. Tokenization (Lexing): Converting text into a stream of tokens.
+     * 3. Parsing: Building an Abstract Syntax Tree (AST) from the tokens.
+     * 4. Rendering: Traversing the AST to generate HTML.
+     *
+     * @param input The raw markdown string.
+     * @returns The generated HTML string.
+     */
+    render(input: string): string {
         const markdown = this.preprocessor.preprocess(input);
         const tokens = this.lexer.tokenize(markdown);
         const ast = this.parser.parse(tokens);
         return this.renderer.render(ast);
     }
 
-    // 支持自定义扩展
+    // Support custom extensions
     // extend(type: TokenType, rule: RegExp, handler: (node: ASTNode) => string) {
     //     this.lexer. addRule(type, rule);
     //     this.renderer.addHandler(type, handler);
     // }
 }
 
-// 使用示例
-// const md = new MarkdownParser();
-// const html = md.parse('# Hello **World**');
-
 const md = new MarkdownParser();
-const content = md.parse("\n`python`");
+const content = md.render("* testing list\n* item 2\n    * subitem 1\n    * subitem 2\n1. ordered item 1\n2. ordered item 2\n\n# heading 1");
 console.log(content);
 
 export {MarkdownParser};

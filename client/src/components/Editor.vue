@@ -4,8 +4,7 @@ import {computed, onBeforeUnmount, onMounted, ref, watch} from 'vue'
 import {Terminal} from '@xterm/xterm'
 import {FitAddon} from '@xterm/addon-fit'
 import '@xterm/xterm/css/xterm.css'
-import MarkdownIt from 'markdown-it'
-import hljs from 'highlight.js/lib/core'
+import '../github-markdown.css'
 import 'highlight.js/styles/github-dark.css'
 import * as signalR from '@microsoft/signalr'
 import {CodeEditor} from 'monaco-editor-vue3'
@@ -102,15 +101,17 @@ const terminalConnection = new signalR.HubConnectionBuilder()
     .build()
 
 // ==================== MARKDOWN ====================
-const md: MarkdownIt = new MarkdownIt({
-    highlight: (code: string, lang: string) => {
-        if (lang && hljs.getLanguage(lang)) {
-            const highlighted = hljs.highlight(code, {language: lang, ignoreIllegals: true}).value
-            return `<pre class="hljs"><code>${highlighted}</code></pre>`
-        }
-        return `<pre class="hljs"><code>${md.utils.escapeHtml(code)}</code></pre>`
-    }
-})
+// const md: MarkdownIt = new MarkdownIt({
+//     highlight: (code: string, lang: string) => {
+//         if (lang && hljs.getLanguage(lang)) {
+//             const highlighted = hljs.highlight(code, {language: lang, ignoreIllegals: true}).value
+//             return `<pre class="hljs"><code>${highlighted}</code></pre>`
+//         }
+//         return `<pre class="hljs"><code>${md.utils.escapeHtml(code)}</code></pre>`
+//     }
+// })
+
+const md = new MarkdownParser()
 
 const renderedHtml = computed(() => md.render(code.value))
 
