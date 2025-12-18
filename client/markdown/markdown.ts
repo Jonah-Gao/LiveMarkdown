@@ -40,7 +40,7 @@ class MarkdownParser {
 }
 
 const md = new MarkdownParser();
-const content = md.render("* testing list\n* item 2\n    * subitem 1\n    * subitem 2\n1. ordered item 1\n2. ordered item 2\n\n# heading 1");
+const content = md.render("\thhh\n\taaa\n\tddd");
 console.log(content);
 
 export {MarkdownParser};

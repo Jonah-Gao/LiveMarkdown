@@ -1,4 +1,4 @@
-﻿import {Token, TokenType, ListItemToken} from './types.ts';
+﻿import {ListItemToken, Token, TokenType} from './types.ts';
 
 /**
  * The Lexer class is responsible for converting the raw markdown string into a stream of tokens.
@@ -11,14 +11,15 @@ class Lexer {
      */
     private blockRules: Array<[TokenType, RegExp]> = [
         [TokenType.CODE_BLOCK, /^```(\w*)\n([\s\S]*?)\n*```$/m],
+        [TokenType.INDENTED_CODE_BLOCK, /^( {4}|\t)(.+)(\n|$)/],
         [TokenType.HEADING, /^(#{1,6})\s+(.+)$/m],
-        [TokenType.HR, /^(_{3,}|-{3,}|\*{3,})$/m],
+        [TokenType.HR, /^ {0,3}(_{3,}|-{3,}|\*{3,})$/m],
         [TokenType.BLOCKQUOTE, /^>\s+(.+)$/m],
         [TokenType.LIST, /^( {0,3})([-*+])(?: {1,4}|\t|$)[\s\S]+?(?:\n{2,}(?! )(?!\1[-*+])|\n+(?=\1\d{1,9}[.)])|\n*$)/],
         [TokenType.LIST, /^( {0,3})(\d{1,9}[.)])(?: {1,4}|\t|$)[\s\S]+?(?:\n{2,}(?! )(?!\1\d{1,9}[.)])|\n+(?=\1[-*+])|\n*$)/],
         [TokenType.PARAGRAPHBREAK, /^(\n{2,})/],
         [TokenType.NEWLINE, /^(\n)/],
-        [TokenType.PARAGRAPH, /^([\s\S]+?)(?=\n{2,}|\n\s*(?:#{1,6}\s|>|```|[-*+]\s|\d+[.)]\s)|$)/]
+        [TokenType.PARAGRAPH, /^([\s\S]+?)(?=\n{2,}|\n\s*(?:#{1,6}\s|>|```|[-*+]\s|\d+[.)]\s)| {4}.+|\t.+|$)/]
     ];
 
     /**
@@ -35,7 +36,7 @@ class Lexer {
         [TokenType.LINK, /\[([^\]]+)]\(([^)]+)\)/],
     ]);
 
-    private itemStartRegex = /^( {0,3})([-*+]|\d{1,9}[.)])([ \t]+|$)/;
+    private itemStartRegex: RegExp = /^( {0,3})([-*+]|\d{1,9}[.)])([ \t]+|$)/;
 
     private specialChars: RegExp = /[#`*_\[\]!\->+\n\\]/;
 
@@ -50,15 +51,55 @@ class Lexer {
         let remaining: string = input;
 
         while (remaining.length > 0) {
-            // let matched: boolean = false;
-
             for (const [type, regex] of this.blockRules) {
                 const match: RegExpMatchArray | null = remaining.match(regex);
                 if (match && match.index === 0) {
-                    tokens.push(this.createToken(type, match));
-                    remaining = remaining.slice(match[0].length);
-                    // matched = true;
-                    break;
+                    if (type !== TokenType.INDENTED_CODE_BLOCK) {
+                        tokens.push(this.createToken(type, match));
+                        remaining = remaining.slice(match[0].length);
+                        break;
+                    } else {
+                        let lines: string[] = [];
+                        lines.push(match[2]); // first line of indent code block
+                        remaining = remaining.slice(match[0].length);
+
+                        while (remaining.length > 0) {
+                            const indentLine = remaining.match(/^( {4}|\t)(.*?)(\n|$)/);
+
+                            if (indentLine) {
+                                // indent line
+                                lines.push(indentLine[2]);
+                                remaining = remaining.slice(indentLine[0].length);
+                            } else if (remaining.startsWith('\n')) {
+                                // empty line, check if more indent lines follow
+                                const emptyLineMatch: RegExpMatchArray | null = remaining.match(/^(\n+)/);
+                                const emptyLineCount: number = emptyLineMatch ? emptyLineMatch[0].length : 0;
+                                const afterEmpty: string = remaining.slice(emptyLineCount);
+                                const hasMoreIndent: boolean = /^(( {4}|\t)(.+)(\n|$))/.test(afterEmpty);
+                                if (hasMoreIndent) {
+                                    // indent lines after empty lines
+                                    for (let i: number = 0; i < emptyLineCount; i++) {
+                                        lines.push('');
+                                    }
+                                    remaining = afterEmpty;
+                                } else {
+                                    // no more indent lines, end of code block
+                                    break;
+                                }
+                            } else {
+                                // not an indent line or empty line, end of code block
+                                break;
+                            }
+                        }
+
+                        const rawCodeBlock = lines.join('\n');
+                        tokens.push({
+                            type: TokenType.CODE_BLOCK,
+                            raw: rawCodeBlock,
+                            text: rawCodeBlock,
+                            lang: 'text',
+                        });
+                    }
                 }
             }
         }
@@ -121,16 +162,16 @@ class Lexer {
      * @returns A ListToken containing ListItemTokens.
      */
     private parseList(match: RegExpMatchArray): Token {
-        const raw = match[0];
-        const bull = match[2];
-        const ordered = bull.length > 1 && (bull.endsWith('.') || bull.endsWith(')'));
+        const raw: string = match[0];
+        const bull: string = match[2];
+        const ordered: boolean = bull.length > 1 && (bull.endsWith('.') || bull.endsWith(')'));
         let start: number | undefined;
 
         if (ordered) {
             start = parseInt(bull, 10);
         }
 
-        const lines = raw.split('\n');
+        const lines: string[] = raw.split('\n');
         // Remove trailing newline if it exists
         if (lines.length > 0 && lines[lines.length - 1] === '') {
             lines.pop();
@@ -140,13 +181,13 @@ class Lexer {
         let currentItemLines: string[] = [];
         let currentContentIndent = 0;
 
-        for (let i = 0; i < lines.length; i++) {
-            const line = lines[i];
-            const m = line.match(this.itemStartRegex);
+        for (let i: number = 0; i < lines.length; i++) {
+            const line: string = lines[i];
+            const m: RegExpMatchArray | null = line.match(this.itemStartRegex);
 
-            let isNewItem = false;
+            let isNewItem: boolean = false;
             if (m) {
-                const indent = m[1].length;
+                const indent: number = m[1].length;
                 if (itemsRaw.length === 0 && currentItemLines.length === 0) {
                     isNewItem = true;
                 } else if (indent < currentContentIndent) {
@@ -171,10 +212,10 @@ class Lexer {
             itemsRaw.push(currentItemLines);
         }
 
-        let loose = false;
+        let loose: boolean = false;
 
-        for (let i = 0; i < itemsRaw.length - 1; i++) {
-            const itemLines = itemsRaw[i];
+        for (let i: number = 0; i < itemsRaw.length - 1; i++) {
+            const itemLines: string[] = itemsRaw[i];
             if (itemLines.length > 0 && itemLines[itemLines.length - 1].trim() === '') {
                 loose = true;
                 break;
@@ -183,7 +224,7 @@ class Lexer {
 
         const items: Token[] = [];
         for (const itemLines of itemsRaw) {
-            const item = this.createListItem(itemLines);
+            const item: Token = this.createListItem(itemLines);
             items.push(item);
             if (!loose && (item as ListItemToken).loose) {
                 loose = true;
@@ -213,14 +254,14 @@ class Lexer {
      * @returns A ListItemToken.
      */
     private createListItem(lines: string[]): Token {
-        const raw = lines.join('\n');
-        const firstLine = lines[0];
-        const m = firstLine.match(this.itemStartRegex);
+        const raw: string = lines.join('\n');
+        const firstLine: string = lines[0];
+        const m: RegExpMatchArray | null = firstLine.match(this.itemStartRegex);
 
 
         let content: string;
-        let indent = 0;
-        let stripLen = 0;
+        let indent: number = 0;
+        let stripLen: number = 0;
 
         if (m) {
             indent = m[1].length;
@@ -230,14 +271,14 @@ class Lexer {
             content = firstLine;
         }
 
-        for (let i = 1; i < lines.length; i++) {
-            const line = lines[i];
-            const matchSpace = line.match(new RegExp(`^[ \\t]{0,${stripLen}}`));
-            const stripped = matchSpace ? line.substring(matchSpace[0].length) : line;
+        for (let i: number = 1; i < lines.length; i++) {
+            const line: string = lines[i];
+            const matchSpace: RegExpMatchArray | null = line.match(new RegExp(`^[ \\t]{0,${stripLen}}`));
+            const stripped: string = matchSpace ? line.substring(matchSpace[0].length) : line;
             content += '\n' + stripped;
         }
 
-        const isLoose = /\n\n/.test(content);
+        const isLoose: boolean = /\n\n/.test(content);
 
         return {
             type: TokenType.LIST_ITEM,

@@ -7,6 +7,7 @@ const enum TokenType {
     HEADING = 'heading',
     PARAGRAPH = 'paragraph',
     CODE_BLOCK = 'code_block',
+    INDENTED_CODE_BLOCK = 'indented_code_block',
     CODE_INLINE = 'code_inline',
     BOLD = 'bold',
     ITALIC = 'italic',
@@ -45,7 +46,7 @@ interface HeadingToken extends BaseToken<TokenType.HEADING> {
 /**
  * Token representing a code block.
  */
-interface CodeBlockToken extends BaseToken<TokenType.CODE_BLOCK> {
+interface CodeBlockToken extends BaseToken<TokenType.CODE_BLOCK | TokenType.INDENTED_CODE_BLOCK> {
     readonly lang: string; // The programming language for syntax highlighting
 }
 
@@ -83,14 +84,27 @@ interface ListItemToken extends BaseToken<TokenType.LIST_ITEM> {
 }
 
 // Inline text types
-type InlineTextType = TokenType.TEXT | TokenType.BOLD | TokenType.ITALIC | TokenType.BOLD_ITALIC | TokenType.CODE_INLINE | TokenType.HARDBREAK | TokenType.SOFTBREAK;
+type InlineTextType =
+    TokenType.TEXT
+    | TokenType.BOLD
+    | TokenType.ITALIC
+    | TokenType.BOLD_ITALIC
+    | TokenType.CODE_INLINE
+    | TokenType.HARDBREAK
+    | TokenType.SOFTBREAK;
 
 interface TextToken extends BaseToken<InlineTextType> {
     readonly type: InlineTextType;
 }
 
 // Simple types
-type SimpleTokenType = TokenType.HR | TokenType.BLOCKQUOTE | TokenType.PARAGRAPH | TokenType.BODY | TokenType.PARAGRAPHBREAK | TokenType.NEWLINE;
+type SimpleTokenType =
+    TokenType.HR
+    | TokenType.BLOCKQUOTE
+    | TokenType.PARAGRAPH
+    | TokenType.BODY
+    | TokenType.PARAGRAPHBREAK
+    | TokenType.NEWLINE;
 
 interface SimpleToken extends BaseToken<SimpleTokenType> {
     readonly type: SimpleTokenType;
