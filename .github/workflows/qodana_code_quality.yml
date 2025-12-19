@@ -9,7 +9,25 @@ on:
       - 'releases/*' # The release branches
 
 jobs:
-  qodana:
+  #  qodana:
+  #    runs-on: ubuntu-latest
+  #    permissions:
+  #      contents: write
+  #      pull-requests: write
+  #      checks: write
+  #    steps:
+  #      - uses: actions/checkout@v3
+  #        with:
+  #          ref: ${{ github.event.pull_request.head.sha }}  # to check out the actual pull request commit, not the merge commit
+  #          fetch-depth: 0  # a full history is required for pull request analysis
+  #      - name: 'Qodana Scan'
+  #        uses: JetBrains/qodana-action@v2025.2
+  #        with:
+  #          pr-mode: false
+  #        env:
+  #          QODANA_TOKEN: ${{ secrets.QODANA_TOKEN_338861849 }}
+  #          QODANA_ENDPOINT: 'https://qodana.cloud'
+  qodana-backend:
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -18,12 +36,36 @@ jobs:
     steps:
       - uses: actions/checkout@v3
         with:
-          ref: ${{ github.event.pull_request.head.sha }}  # to check out the actual pull request commit, not the merge commit
-          fetch-depth: 0  # a full history is required for pull request analysis
-      - name: 'Qodana Scan'
+          ref: ${{ github.event.pull_request.head.sha }} # to check out the actual pull request commit, not the merge commit
+          fetch-depth: 0 # a full history is required for pull request analysis
+      - name: 'Qodana Backend'
         uses: JetBrains/qodana-action@v2025.2
         with:
           pr-mode: false
+          args: |
+            --source-directory,kernel,--config,qodana-backend.yaml
+          artifact-name: qodana-backend
         env:
-          QODANA_TOKEN: ${{ secrets.QODANA_TOKEN_338861849 }}
+          QODANA_TOKEN: ${{ secrets.QODANA_TOKEN_BACKEND }}
+          QODANA_ENDPOINT: 'https://qodana.cloud'
+  qodana-frontend:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+      checks: write
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          ref: ${{ github.event.pull_request.head.sha }} # to check out the actual pull request commit, not the merge commit
+          fetch-depth: 0 # a full history is required for pull request analysis
+      - name: 'Qodana Frontend'
+        uses: JetBrains/qodana-action@v2025.2
+        with:
+          pr-mode: false
+          args: |
+            --source-directory,client,--config,qodana-frontend.yaml
+          artifact-name: qodana-frontend
+        env:
+          QODANA_TOKEN: ${{ secrets.QODANA_TOKEN_FRONTEND }}
           QODANA_ENDPOINT: 'https://qodana.cloud'
