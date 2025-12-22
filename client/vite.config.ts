@@ -28,8 +28,8 @@ export default defineConfig({
                         rollupOptions: {
                             external: ["@lydell/node-pty"],
                             output: {
-                                format: 'module', // 使用 moduleJS 格式
-                                entryFileNames: 'preload.mjs', // 强制文件名为 preload.mjs
+                                format: 'module', // Use moduleJS format
+                                entryFileNames: 'preload.mjs', // Force filename to preload.mjs
                             }
                         }
                     }
@@ -46,7 +46,8 @@ export default defineConfig({
     ],
     resolve: {
         alias: {
-            "@markdown": path.resolve(__dirname, "markdown"),
+            "@markdown": path.resolve(__dirname, "src/lib/markdown"),
+            "@": path.resolve(__dirname, "src"),
         },
     }
 

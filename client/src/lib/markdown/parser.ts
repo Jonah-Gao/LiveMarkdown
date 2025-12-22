@@ -28,9 +28,6 @@ class Parser {
         return root;
     }
 
-    // private readonly attributeKeys: string[] = [
-    //     'align',    // Table alignment
-    // ];
 
     /**
      * Extracts attributes from a token to be stored in the AST node.

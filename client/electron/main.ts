@@ -100,7 +100,7 @@ ipcMain.handle('read-dir', async (_event: Electron.IpcMainInvokeEvent, dirPath: 
             const extension: string = path.extname(entry.name).slice(1)
             const fullPath = path.join(dirPath, entry.name)
             try {
-                // 直接使用 entry.isDirectory()，不需要额外的 stat() 调用
+                // Use entry.isDirectory() directly, no need for extra stat() call
                 const node: FileNode = {
                     name: entry.name,
                     path: fullPath,

@@ -48,6 +48,7 @@ yarn-debug.log*
 pnpm-debug.log*
 lerna-debug.log*
 frontend-legacy
+dist-electron
 
 # =========================
 # .NET / Backend
@@ -110,3 +111,4 @@ pids
 .tern-port
 .yarn-integrity
 TextEditorPlan.md
+test

@@ -4,12 +4,15 @@ import {computed, onBeforeUnmount, onMounted, ref, watch} from 'vue'
 import {Terminal} from '@xterm/xterm'
 import {FitAddon} from '@xterm/addon-fit'
 import '@xterm/xterm/css/xterm.css'
-import '../github-markdown.css'
+import '../styles/github-markdown.css'
 import 'highlight.js/styles/github-dark.css'
 import * as signalR from '@microsoft/signalr'
 import {CodeEditor} from 'monaco-editor-vue3'
 import FileTreeNode from './FileTreeNode.vue'
 import {MarkdownParser} from '@markdown/markdown'
+import {kernelConnection} from "@/services/kernelSignalr.ts";
+import {theme} from "@/styles/GithubTerminalTheme.ts";
+import SIGNALR_CONFIG_JSON from '@/config/signalr.json'
 
 // ==================== TYPES ====================
 interface FileNode {
@@ -29,11 +32,17 @@ interface Tab {
     isDirty: boolean
 }
 
-// ==================== CONSTANTS ====================
-const SIGNALR_CONFIG = {
-    markdownHub: 'http://localhost:5238/mdHub',
-    terminalHub: 'http://localhost:5238/terminalHub'
+interface TabChunk {
+    id: string
+    name: string
+    path: string
+    content: string
+    isMetadata: boolean
+    isError: boolean
 }
+
+// ==================== CONSTANTS ====================
+const SIGNALR_CONFIG = SIGNALR_CONFIG_JSON
 
 const TERMINAL_CONFIG = {
     fontFamily: 'JetBrains Mono, monospace',
@@ -42,7 +51,8 @@ const TERMINAL_CONFIG = {
     fontSize: 13,
     lineHeight: 1,
     letterSpacing: 0,
-    theme: {background: '#010409'}
+    theme: theme,
+    convertEol: true,
 }
 
 const EDITOR_OPTIONS = {
@@ -77,14 +87,15 @@ const tabs = ref<Tab[]>([
         name: 'Untitled',
         path: '',
         content: '# Hello, Monaco Editor Vue3!',
-        isDirty: false
+        isDirty: false,
     }
 ])
 const activeTabIndex = ref(0)
 
 // File Explorer State
 const fileTree = ref<FileNode[]>([])
-const rootDirectory = ref('E:\\CS_NEA_Project\\client')
+// TODO: Change this hardcoded path to a dynamic one or a configuration
+const rootDirectory = ref('E:\\CS_NEA_Project\\test')
 
 // Terminal State
 const terminal = ref<HTMLElement | null>(null)
@@ -92,35 +103,26 @@ let xterm: Terminal
 let fitAddon: FitAddon
 
 // ==================== SIGNALR CONNECTIONS ====================
-const connection = new signalR.HubConnectionBuilder()
-    .withUrl(SIGNALR_CONFIG.markdownHub)
-    .build()
-
 const terminalConnection = new signalR.HubConnectionBuilder()
     .withUrl(SIGNALR_CONFIG.terminalHub)
     .build()
 
-// ==================== MARKDOWN ====================
-// const md: MarkdownIt = new MarkdownIt({
-//     highlight: (code: string, lang: string) => {
-//         if (lang && hljs.getLanguage(lang)) {
-//             const highlighted = hljs.highlight(code, {language: lang, ignoreIllegals: true}).value
-//             return `<pre class="hljs"><code>${highlighted}</code></pre>`
-//         }
-//         return `<pre class="hljs"><code>${md.utils.escapeHtml(code)}</code></pre>`
-//     }
-// })
+const fileServiceConnection = new signalR.HubConnectionBuilder()
+    .withUrl(SIGNALR_CONFIG.fileHub)
+    .build();
 
+// ==================== MARKDOWN ====================
 const md = new MarkdownParser()
 
-const renderedHtml = computed(() => md.render(code.value))
+const renderedVNode = computed(() => md.render(code.value))
 
 // ==================== COMPUTED ====================
 const showExplorer = computed(() => activeIndexTop.value === 0 && explorerVisible.value)
 const showTerminal = computed(() => activeIndexBottom.value === 1)
 
 // ==================== TERMINAL HANDLERS ====================
-window.terminal.onOutput((output: string) => {
+terminalConnection.on('TerminalOutput', (output: string) => {
+    console.log('TerminalOutput:', JSON.stringify(output));
     if (xterm) {
         xterm.write(output)
     }
@@ -134,11 +136,12 @@ function initializeTerminal() {
     xterm.open(terminal.value!)
     fitAddon.fit()
     // xterm.writeln('Welcome to xterm.js + Vue.js!')
-    window.terminal.input("");
+    // terminalConnection.invoke('TerminalInput', "");
     // setupTerminalInput()
-    window.terminal.init()
+
     xterm.onData(data => {
-        window.terminal.input(data);
+        console.log('Input:', JSON.stringify(data));
+        terminalConnection.invoke('TerminalInput', data);
     })
 }
 
@@ -198,6 +201,65 @@ function closeTab(tab: Tab) {
     }
 }
 
+async function readDirAsync(directoryPath: string, targetArray: FileNode[]): Promise<void> {
+    fileServiceConnection.stream<FileNode>('ReadDirAsync', directoryPath)
+        .subscribe({
+            next: (fileNode) => {
+                // 每次后端 yield return，这里就会被调用一次
+                console.log('Received file:', fileNode.name)
+                // 更新 UI，比如添加到文件树
+                if (fileNode.isDirectory) {
+                    fileNode.children = []
+                }
+                targetArray.push(fileNode)
+            },
+            complete: () => {
+                console.log('Loaded', targetArray.length, 'items from', directoryPath)
+            },
+            error: (err) => {
+                console.error('Failed to load', directoryPath, err)
+            }
+        })
+}
+
+async function StreamTabAsync(fileName: string, filePath: string): Promise<void> {
+    fileServiceConnection.stream<TabChunk>('StreamTabAsync', fileName, filePath)
+        .subscribe({
+            next: (chunk) => {
+                if (chunk.isMetadata) {
+                    // 创建 Tab
+                    const tab = {
+                        id: chunk.id,
+                        name: chunk.name,
+                        path: chunk.path,
+                        content: '',
+                        isDirty: false,
+                    }
+                    tabs.value.push(tab);
+                    openTab(tab);
+                } else if (chunk.isError) {
+                    // 显示错误
+                    console.error('Error loading tab:', chunk.content)
+                } else {
+                    // 拼接内容
+                    const tab = tabs.value.find(t => t.id === chunk.id)
+                    if (tab) {
+                        tab.content += chunk.content
+                    }
+                    openTab(tab!);
+                }
+            },
+            complete: () => {
+                // const tab = tabs.value.find(t => t.id === currentTabId)
+            },
+            error: (err) => {
+                // 这里只会收到网络错误（如 SignalR 断开连接）
+                // 业务逻辑错误已经被后端转换为 ErrorChunk
+                console.error('Stream error:', err)
+            }
+        })
+}
+
 // ==================== FILE EXPLORER ====================
 async function loadFileTree() {
     try {
@@ -207,8 +269,10 @@ async function loadFileTree() {
             extension: '',
             isDirectory: true,
             expanded: true,
-            children: await window.fileAPI.readDir(rootDirectory.value)
+            children: []
         }]
+        await readDirAsync(rootDirectory.value, fileTree.value[0].children!);
+
     } catch (err) {
         console.error('Error loading file tree:', err)
     }
@@ -218,9 +282,9 @@ async function toggleFolder(node: FileNode) {
     node.expanded = !node.expanded
 
     if (node.expanded && (!node.children || node.children.length === 0)) {
-        // 只在第一次展开且没有子节点时才加载
+        // Load only when expanded for the first time and there are no children
         try {
-            node.children = await window.fileAPI.readDir(node.path)
+            await readDirAsync(node.path, node.children!);
         } catch (err) {
             console.error('Error loading folder contents:', err)
         }
@@ -235,9 +299,7 @@ async function openFile(node: FileNode) {
         if (existingTab) {
             openTab(existingTab)
         } else {
-            const newTab: Tab = await window.fileAPI.createTab(node.name, node.path);
-            tabs.value.push(newTab);
-            openTab(newTab);
+            await StreamTabAsync(node.name, node.path);
         }
         console.log('Opened file:', node.path);
     } catch (err) {
@@ -248,8 +310,9 @@ async function openFile(node: FileNode) {
 // ==================== SIGNALR ====================
 async function initializeSignalR() {
     try {
-        await connection.start()
-        await terminalConnection.start()
+        await terminalConnection.start();
+        await kernelConnection.start();
+        await fileServiceConnection.start();
         console.log('SignalR connections established')
     } catch (err) {
         console.error('SignalR connection failed:', err)
@@ -257,17 +320,6 @@ async function initializeSignalR() {
 }
 
 // ==================== WATCHERS ====================
-watch(code, (newVal) => {
-    // Update active tab content
-    if (tabs.value[activeTabIndex.value]) {
-        tabs.value[activeTabIndex.value].content = newVal
-        tabs.value[activeTabIndex.value].isDirty = true
-    }
-
-    connection.invoke('ReceiveMarkdown', newVal)
-        .catch(err => console.error('Error syncing markdown:', err))
-}, {deep: true})
-
 watch(activeTabIndex, (newIndex) => {
     if (tabs.value[newIndex]) {
         code.value = tabs.value[newIndex].content
@@ -282,10 +334,12 @@ watch(showTerminal, (newVal) => {
 
 // ==================== LIFECYCLE ====================
 onMounted(async () => {
-    await initializeSignalR()
     initializeTerminal()
+    await initializeSignalR()
+    await terminalConnection.invoke('TerminalInit');
     await loadFileTree()
     window.addEventListener('resize', handleResize)
+
 })
 
 onBeforeUnmount(() => {
@@ -294,8 +348,6 @@ onBeforeUnmount(() => {
     if (xterm) {
         xterm.dispose()
     }
-
-    connection.stop().catch(err => console.error('Error closing markdown connection:', err))
     terminalConnection.stop().catch(err => console.error('Error closing terminal connection:', err))
 })
 </script>
@@ -390,7 +442,9 @@ onBeforeUnmount(() => {
 
                             <div class="preview-main">
                                 <div class="preview-header">Preview</div>
-                                <div class="markdown-body" v-html="renderedHtml"></div>
+                                <div class="markdown-body">
+                                    <component :is="renderedVNode"/>
+                                </div>
                             </div>
                         </div>
                     </div>

@@ -2,6 +2,7 @@
 import {Parser} from './parser';
 import {Renderer} from './renderer';
 import {Preprocessor} from "./preprocessor.ts";
+import {VNode} from "vue";
 
 /**
  * Main class for the Markdown parser.
@@ -25,7 +26,7 @@ class MarkdownParser {
      * @param input The raw markdown string.
      * @returns The generated HTML string.
      */
-    render(input: string): string {
+    render(input: string): VNode {
         const markdown = this.preprocessor.preprocess(input);
         const tokens = this.lexer.tokenize(markdown);
         const ast = this.parser.parse(tokens);

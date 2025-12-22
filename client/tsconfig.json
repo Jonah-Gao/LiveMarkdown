@@ -21,7 +21,8 @@
     "noFallthroughCasesInSwitch": true,
     "baseUrl": ".",
     "paths": {
-      "@markdown/*": ["markdown/*"]
+      "@markdown/*": ["src/lib/markdown/*"],
+      "@/*": ["src/*"]
     }
   },
   "include": ["src"],

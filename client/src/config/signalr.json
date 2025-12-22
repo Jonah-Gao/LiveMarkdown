@@ -1,0 +1,6 @@
+﻿{
+    "markdownHub": "http://localhost:5238/mdHub",
+    "terminalHub": "http://localhost:5238/terminalHub",
+    "kernelHub": "http://localhost:5238/kernelHub",
+    "fileHub": "http://localhost:5238/fileHub"
+}

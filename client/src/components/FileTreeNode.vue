@@ -32,12 +32,12 @@ const icons = {
 } as const
 
 const categoryMap: Partial<Record<IconKey, string[]>> = {
-    image: ['png', 'jpg', 'jpeg', 'gif', 'svg', 'bmp', 'webp'],
-    json: ['json'],
-    javascript: ['js', 'jsx', 'mjs', 'cjs', 'ts', 'tsx'], // 补上了 ts
-    markdown: ['md', 'mdx'],
-    csv: ['csv'],
-    database: ['db', 'sqlite', 'sqlite3', 'sql'],
+    image: ['.png', '.jpg', '.jpeg', '.gif', '.svg', '.bmp', '.webp'],
+    json: ['.json'],
+    javascript: ['.js', '.jsx', '.mjs', '.cjs', '.ts', '.tsx'], // Added ts
+    markdown: ['.md', '.mdx'],
+    csv: ['.csv'],
+    database: ['.db', '.sqlite', '.sqlite3', '.sql'],
 };
 
 const extensionIndex = new Map<string, IconKey>();
@@ -165,4 +165,3 @@ function handleClick(node: FileNode) {
     padding-left: 12px;
 }
 </style>
-
