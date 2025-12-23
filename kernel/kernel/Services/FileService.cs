@@ -33,10 +33,10 @@ public class FileService(ILogger<FileService> logger)
     public async IAsyncEnumerable<TabChunk> StreamTabAsync(string fileName, string filePath,
         [EnumeratorCancellation] CancellationToken token = default)
     {
-        string tabId = Guid.NewGuid().ToString();
+        var tabId = Guid.NewGuid().ToString();
 
         // 1. 先返回 Tab 元数据
-        yield return new TabChunk()
+        yield return new TabChunk
         {
             Id = tabId,
             Name = fileName,
@@ -96,7 +96,7 @@ public class FileService(ILogger<FileService> logger)
         }
     }
 
-    private TabChunk ErrorTabChunk(string tabId, string errorMessage)
+    private static TabChunk ErrorTabChunk(string tabId, string errorMessage)
     {
         return new TabChunk
         {
@@ -110,7 +110,7 @@ public class FileService(ILogger<FileService> logger)
     public async IAsyncEnumerable<FileNode> ReadDirAsync(string dirPath,
         [EnumeratorCancellation] CancellationToken token = default)
     {
-        int count = 0;
+        var count = 0;
         IEnumerable<FileSystemInfo> entries;
         try
         {
@@ -139,7 +139,7 @@ public class FileService(ILogger<FileService> logger)
                     Path = entry.FullName,
                     Extension = entry is FileInfo file ? file.Extension : string.Empty,
                     IsDirectory = entry is DirectoryInfo,
-                    Expanded = false,
+                    Expanded = false
                 };
             }
             catch (UnauthorizedAccessException)

@@ -9,7 +9,7 @@ public class PythonHub(PythonVenvRunner pythonService, ILogger<PythonHub> logger
     public async Task ExecuteCodeAsync(string terminalId, string userCode, string systemPythonPath, string venvPath)
     {
         
-        string connectionId = Context.ConnectionId;
+        var connectionId = Context.ConnectionId;
         logger.LogInformation("Initializing terminal for connection\n\tTerminal ID: {terminalId}\n\tConnection ID: {ConnectionId}", LogFormatter.ToCyan(terminalId), LogFormatter.ToCyan(connectionId));
         
         await pythonService.ExecuteCodeAsync(connectionId, terminalId, userCode, systemPythonPath, venvPath);

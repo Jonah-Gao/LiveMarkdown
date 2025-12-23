@@ -1,32 +1,9 @@
-import {app, BrowserWindow, ipcMain} from 'electron';
+import {app, BrowserWindow} from 'electron';
 import {fileURLToPath} from 'node:url';
 import path from 'node:path';
-import fs from "fs";
-import * as pty from "@lydell/node-pty";
-import os from "os";
 
 
-// const require = createRequire(import.meta.url)
 const __dirname: string = path.dirname(fileURLToPath(import.meta.url));
-interface FileNode {
-    name: string
-    path: string
-    extension: string
-    isDirectory: boolean
-    children?: FileNode[]
-    expanded?: boolean
-}
-
-interface Tab {
-    id: string
-    name: string
-    path: string
-    content: string
-    isDirty: boolean
-}
-
-let ptyProcess: pty.IPty | null;
-
 
 // The built directory structure
 

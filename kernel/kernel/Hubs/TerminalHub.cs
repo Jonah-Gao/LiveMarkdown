@@ -9,7 +9,7 @@ public class TerminalHub(TerminalService terminalService, ILogger<TerminalHub> l
 {
     public async Task TerminalInit()
     {
-        string connectionId = Context.ConnectionId;
+        var connectionId = Context.ConnectionId;
         logger.LogInformation("Initializing terminal for connection: {ConnectionId}", LogFormatter.ToCyan(connectionId));
 
         await terminalService.StartTerminalAsync(connectionId, "TerminalOutput");

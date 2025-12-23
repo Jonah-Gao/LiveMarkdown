@@ -29,7 +29,7 @@ public class TerminalService(ILogger<TerminalService> logger, IHubContext<Termin
     // - commandLine: optional arguments passed to the shell executable
     public async Task StartTerminalAsync(string connectionId, string outputRoute, string[]? commandLine = null)
     {
-        string shell = RuntimeInformation.IsOSPlatform(OSPlatform.Windows) ? "powershell.exe" : "bash";
+        var shell = RuntimeInformation.IsOSPlatform(OSPlatform.Windows) ? "powershell.exe" : "bash";
 
         var options = new PtyOptions
         {
@@ -39,7 +39,7 @@ public class TerminalService(ILogger<TerminalService> logger, IHubContext<Termin
             Cols = 80,
             CommandLine = commandLine ?? [],
             Cwd = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
-            Environment = new Dictionary<string, string>()
+            Environment = new Dictionary<string, string>
             {
                 // Env Variables can be set here if needed
             }
@@ -69,7 +69,7 @@ public class TerminalService(ILogger<TerminalService> logger, IHubContext<Termin
                             int bytesRead = await stream.ReadAsync(buffer, cts.Token);
                             if (bytesRead == 0) break;
 
-                            string output = Encoding.UTF8.GetString(buffer, 0, bytesRead);
+                            var output = Encoding.UTF8.GetString(buffer, 0, bytesRead);
                             // Log output at Debug level to avoid flooding the logs during normal operation
                             logger.LogDebug(
                                 "[Terminal {ConnectionId}, Output Route {OutputRoute}] Output: {Output}",
@@ -113,7 +113,7 @@ public class TerminalService(ILogger<TerminalService> logger, IHubContext<Termin
             // Log input at Debug level to avoid noise
             logger.LogDebug("Writing input to terminal {TerminalId}: {InputPreview}", LogFormatter.ToCyan(terminalId),
                 LogFormatter.ToYellow(input.Length > 32 ? input[..32] + "..." : input));
-            byte[] data = Encoding.UTF8.GetBytes(input);
+            var data = Encoding.UTF8.GetBytes(input);
             await terminal.WriterStream.WriteAsync(data, 0, data.Length);
             await terminal.WriterStream.FlushAsync();
         }

@@ -25,7 +25,7 @@ public class PythonVenvRunner(ILogger<PythonVenvRunner> logger, IHubContext<Pyth
     private async Task EnsureVenvExistsAsync(string venvPath, string systemPythonPath)
     {
         // Simple existence check: ensure venv directory and pyvenv.cfg exist.
-        if (Directory.Exists(venvPath) && (File.Exists(Path.Combine(venvPath, "pyvenv.cfg"))))
+        if (Directory.Exists(venvPath) && File.Exists(Path.Combine(venvPath, "pyvenv.cfg")))
         {
             logger.LogInformation("Virtual environment already exists at {VenvPath}", LogFormatter.ToGreen(venvPath));
             return;
@@ -56,7 +56,7 @@ public class PythonVenvRunner(ILogger<PythonVenvRunner> logger, IHubContext<Pyth
 
             if (process.ExitCode != 0)
             {
-                string error = await process.StandardError.ReadToEndAsync();
+                var error = await process.StandardError.ReadToEndAsync();
                 logger.LogError("Failed to create virtual environment: {Error}", LogFormatter.ToBrightRed(error));
                 throw new Exception($"Failed to create virtual environment: {error}");
             }
@@ -72,9 +72,9 @@ public class PythonVenvRunner(ILogger<PythonVenvRunner> logger, IHubContext<Pyth
         KillTerminal(terminalId);
 
         await EnsureVenvExistsAsync(venvPath, systemPythonPath);
-        string venvPythonExe = GetVenvPythonExecutable(venvPath);
+        var venvPythonExe = GetVenvPythonExecutable(venvPath);
         // Use Guid to generate a unique filename without creating it immediately
-        string tempScriptPath = Path.Combine(Path.GetTempPath(), $"kernel_script_{Guid.NewGuid()}.py");
+        var tempScriptPath = Path.Combine(Path.GetTempPath(), $"kernel_script_{Guid.NewGuid()}.py");
         await File.WriteAllTextAsync(tempScriptPath, userCode, Encoding.UTF8);
         logger.LogInformation(
             "Executing Python code in terminal {TerminalId} (connection {ConnectionId}). Script: {ScriptPath}",
@@ -93,11 +93,11 @@ public class PythonVenvRunner(ILogger<PythonVenvRunner> logger, IHubContext<Pyth
         // Note: File deletion is handled in RunProcessAsync when the process exits
     }
 
-    private string GetVenvPythonExecutable(string venvPath)
+    private static string GetVenvPythonExecutable(string venvPath)
     {
         // Windows and Unix venv layout differs
-        string winPath = Path.Combine(venvPath, "Scripts", "python.exe");
-        string unixPath = Path.Combine(venvPath, "bin", "python");
+        var winPath = Path.Combine(venvPath, "Scripts", "python.exe");
+        var unixPath = Path.Combine(venvPath, "bin", "python");
 
         return OperatingSystem.IsWindows() ? winPath : unixPath;
     }
@@ -106,17 +106,16 @@ public class PythonVenvRunner(ILogger<PythonVenvRunner> logger, IHubContext<Pyth
     {
         logger.LogInformation("Spawning venv python: {PythonExe} {Script}", LogFormatter.ToYellow(venvPythonPath),
             LogFormatter.ToGreen(scriptPath));
-        string shell = venvPythonPath;
 
         var options = new PtyOptions
         {
-            App = shell,
+            App = venvPythonPath,
             Name = "xterm-color",
             Rows = 30,
             Cols = 80,
             CommandLine = [scriptPath],
             Cwd = Path.GetDirectoryName(scriptPath) ?? Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
-            Environment = new Dictionary<string, string>()
+            Environment = new Dictionary<string, string>
             {
                 { "PYTHONUNBUFFERED", "1" }
             }
@@ -147,7 +146,7 @@ public class PythonVenvRunner(ILogger<PythonVenvRunner> logger, IHubContext<Pyth
                             int bytesRead = await stream.ReadAsync(buffer, cts.Token);
                             if (bytesRead == 0) break;
 
-                            string output = Encoding.UTF8.GetString(buffer, 0, bytesRead);
+                            var output = Encoding.UTF8.GetString(buffer, 0, bytesRead);
                             // Log output at Debug level to avoid flooding logs
                             logger.LogDebug("[Python {TerminalId}] Output: {Output}", LogFormatter.ToCyan(terminalId),
                                 LogFormatter.ToGreen(output));
@@ -220,7 +219,7 @@ public class PythonVenvRunner(ILogger<PythonVenvRunner> logger, IHubContext<Pyth
             logger.LogDebug("Writing input to python terminal {TerminalId}: {InputPreview}",
                 LogFormatter.ToCyan(terminalId),
                 LogFormatter.ToYellow(input.Length > 64 ? input[..64] + "..." : input));
-            byte[] data = Encoding.UTF8.GetBytes(input);
+            var data = Encoding.UTF8.GetBytes(input);
             await terminal.WriterStream.WriteAsync(data, 0, data.Length);
             await terminal.WriterStream.FlushAsync();
         }
