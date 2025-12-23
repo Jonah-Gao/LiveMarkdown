@@ -14,6 +14,15 @@ import {kernelConnection} from "@/services/kernelSignalr.ts";
 import {theme} from "@/styles/GithubTerminalTheme.ts";
 import SIGNALR_CONFIG_JSON from '@/config/signalr.json'
 
+
+// TODO: Global file search
+// TODO: File operations: create, delete, rename, move, copy
+// TODO: LSP integration for code intelligence
+// TODO: Run terminal for code execution
+// TODO: Resizeable panels
+// TODO: Tab caching and recovery
+// TODO: Settings panel
+// TODO: Last opened files, layouts, file tree state persistence by localCache
 // ==================== TYPES ====================
 interface FileNode {
     name: string

@@ -24,20 +24,8 @@ contextBridge.exposeInMainWorld('ipcRenderer', {
     // ...
 })
 
-contextBridge.exposeInMainWorld("fileAPI", {
-    readDir: (dir: string) => ipcRenderer.invoke("read-dir", dir),
-    createTab: (name: string, path: string) => ipcRenderer.invoke("create-tab", name, path),
-});
-
-
 contextBridge.exposeInMainWorld("nodePath", {
     join: (...args: string[]): string => path.join(...args),
     dirname: (p: string): string => path.dirname(p),
     basename: (p: string, ext?: string): string => path.basename(p, ext)
-})
-
-contextBridge.exposeInMainWorld("terminal", {
-    init: () => ipcRenderer.send("terminal-init"),
-    input: (data: string) => ipcRenderer.send("terminal-input", data),
-    onOutput: (callback: (data: string) => void) => ipcRenderer.on("terminal-output", (_event, data) => callback(data)),
 })

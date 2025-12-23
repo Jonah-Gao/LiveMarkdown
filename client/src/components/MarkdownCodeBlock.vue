@@ -38,14 +38,25 @@ const onOutputReceived = (targetId: string, output: string) => {
     }
 };
 
+const onCodeExecutionCompleted = (targetId: string) => {
+    if (terminalId !== targetId) return;
+    console.log(`[SignalR] Code execution completed for terminal ${terminalId}`);
+    if (xterm) {
+        xterm.options.cursorBlink = false;
+        xterm.options.cursorStyle = 'block';
+    }
+};
+
 onMounted(async () => {
     // 1. Initialize Terminal UI
     initializeTerminal();
 
     // 2. Register SignalR listener
     // Remove old listener with same name first (prevent duplicate printing caused by hot reload or component reuse)
+    // TODO: add function to run code in Run terminal
     kernelConnection.off('CodeOutput');
     kernelConnection.on('CodeOutput', onOutputReceived);
+    kernelConnection.on('CodeExecutionCompleted', onCodeExecutionCompleted);
 
     // 3. Ensure connection is started
     if (kernelConnection.state !== 'Connected') {

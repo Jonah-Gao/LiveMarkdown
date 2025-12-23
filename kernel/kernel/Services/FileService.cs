@@ -1,38 +1,33 @@
 ﻿using System.Runtime.CompilerServices;
-using kernel.Hubs;
-using Microsoft.AspNetCore.SignalR;
+using JetBrains.Annotations;
+using kernel.Utils;
 
 namespace kernel.Services;
 
-public class FileService
+
+// TODO: Directory watching to auto-refresh file tree and open tabs on changes
+// TODO: Indexing the directory in a background task for faster access
+// TODO: file operations: create, delete, rename, move, copy
+public class FileService(ILogger<FileService> logger)
 {
     public class FileNode
     {
-        public string Name { get; set; } = string.Empty;
-        public string Path { get; set; } = string.Empty;
-        public string Extension { get; set; } = string.Empty;
-        public bool IsDirectory { get; set; }
-        public IAsyncEnumerable<FileNode>? Children { get; set; }
-        public bool? Expanded { get; set; }
+        [UsedImplicitly] public string Name { get; set; } = string.Empty;
+        [UsedImplicitly] public string Path { get; set; } = string.Empty;
+        [UsedImplicitly] public string Extension { get; set; } = string.Empty;
+        [UsedImplicitly] public bool IsDirectory { get; set; }
+        [UsedImplicitly] public IAsyncEnumerable<FileNode>? Children { get; set; }
+        [UsedImplicitly] public bool? Expanded { get; set; }
     }
 
     public class TabChunk
     {
-        public string Id { get; set; } = string.Empty;
-        public string Name { get; set; } = string.Empty;
-        public string Path { get; set; } = string.Empty;
-        public string Content { get; set; } = string.Empty;
-        public bool IsMetadata { get; set; }
-        public bool IsError { get; set; }
-    }
-
-    private readonly ILogger<FileService> _logger;
-    private readonly IHubContext<FileHub> _hubContext;
-
-    public FileService(ILogger<FileService> logger, IHubContext<FileHub> hubContext)
-    {
-        _logger = logger;
-        _hubContext = hubContext;
+        [UsedImplicitly] public string Id { get; set; } = string.Empty;
+        [UsedImplicitly] public string Name { get; set; } = string.Empty;
+        [UsedImplicitly] public string Path { get; set; } = string.Empty;
+        [UsedImplicitly] public string Content { get; set; } = string.Empty;
+        [UsedImplicitly] public bool IsMetadata { get; set; }
+        [UsedImplicitly] public bool IsError { get; set; }
     }
 
     public async IAsyncEnumerable<TabChunk> StreamTabAsync(string fileName, string filePath,
@@ -67,12 +62,12 @@ public class FileService
         }
         catch (UnauthorizedAccessException ex)
         {
-            _logger.LogError(ex, "Access denied: {FilePath}", filePath);
+            logger.LogError(ex, "Access denied: {FilePath}", LogFormatter.ToBrightRed(filePath));
             errorTabChunk = ErrorTabChunk(tabId, ex.Message);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Cannot open file: {FilePath}", filePath);
+            logger.LogError(ex, "Cannot open file: {FilePath}", LogFormatter.ToBrightRed(filePath));
             errorTabChunk = ErrorTabChunk(tabId, ex.Message);
         }
 
@@ -123,7 +118,7 @@ public class FileService
         }
         catch (UnauthorizedAccessException ex)
         {
-            _logger.LogWarning("Access denied to {Path}: {Msg}", dirPath, ex.Message);
+            logger.LogWarning("Access denied to {Path}: {Msg}", dirPath, ex.Message);
             yield break; // 如果根目录都打不开，直接退出
         }
 
@@ -153,12 +148,12 @@ public class FileService
             }
             catch (PathTooLongException)
             {
-                _logger.LogWarning("Path too long: {Name}", entry.Name);
+                logger.LogWarning("Path too long: {Name}", entry.Name);
                 continue;
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error reading:  {Name}", entry.Name);
+                logger.LogError(ex, "Error reading:  {Name}", entry.Name);
                 continue;
             }
 

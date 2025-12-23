@@ -1,29 +1,21 @@
-﻿using System.Runtime.CompilerServices;
-using kernel.Services;
+﻿using kernel.Services;
+using kernel.Utils;
 using Microsoft.AspNetCore.SignalR;
 
 namespace kernel.Hubs;
 
-public class FileHub : Hub
+public class FileHub(FileService fileService, ILogger<FileHub> logger) : Hub
 {
-    private readonly ILogger<FileHub> _logger;
-    private readonly FileService _fileService;
-
-    public FileHub(FileService fileService, ILogger<FileHub> logger)
-    {
-        _fileService = fileService;
-        _logger = logger;
-    }
-
     public IAsyncEnumerable<FileService.FileNode> ReadDirAsync(string dirPath)
     {
-        _logger.LogInformation("Reading files in directory: {DirPath}", dirPath);
-        return _fileService.ReadDirAsync(dirPath);
+        // Log directory reading at Debug level as it can be frequent during navigation
+        logger.LogDebug("Reading files in directory: {DirPath}", LogFormatter.ToGreen(dirPath));
+        return fileService.ReadDirAsync(dirPath);
     }
 
     public IAsyncEnumerable<FileService.TabChunk> StreamTabAsync(string fileName, string filePath)
     {
-        _logger.LogInformation("Creating tab for file: {FilePath}", filePath);
-        return _fileService.StreamTabAsync(fileName, filePath);
+        logger.LogInformation("Creating tab for file: {FilePath}", LogFormatter.ToGreen(filePath));
+        return fileService.StreamTabAsync(fileName, filePath);
     }
 }

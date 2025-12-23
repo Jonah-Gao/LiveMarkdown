@@ -1,4 +1,5 @@
 ﻿using kernel.Hubs;
+using kernel.Utils;
 
 namespace kernel.Services;
 
@@ -15,18 +16,12 @@ using Pty.Net;
 // - Relay output from the PTY to a SignalR client output route
 // - Accept input and control commands (resize, kill)
 // - Track active terminals and cancellation tokens per connection
-public class TerminalService
+
+// TODO: Fix auto-inserted newline when typing the first two characters after launching the terminal
+public class TerminalService(ILogger<TerminalService> logger, IHubContext<TerminalHub> hubContext)
 {
     private readonly ConcurrentDictionary<string, IPtyConnection> _terminals = new();
     private readonly ConcurrentDictionary<string, CancellationTokenSource> _cts = new();
-    private readonly ILogger<TerminalService> _logger;
-    private readonly IHubContext<TerminalHub> _hubContext;
-
-    public TerminalService(ILogger<TerminalService> logger, IHubContext<TerminalHub> hubContext)
-    {
-        _logger = logger;
-        _hubContext = hubContext;
-    }
 
     // StartTerminalAsync: Create and monitor a PTY connection for a client.
     // - connectionId: SignalR connection id to send output to
@@ -51,10 +46,10 @@ public class TerminalService
         };
 
         // Log starting information with a structured scope so the connection id is included in all subsequent logs
-        using (_logger.BeginScope(new Dictionary<string, object> { ["ConnectionId"] = connectionId }))
+        using (logger.BeginScope(new Dictionary<string, object> { ["ConnectionId"] = connectionId }))
         {
-            _logger.LogInformation("Starting terminal for connection {ConnectionId} (shell={Shell}, cwd={Cwd})",
-                connectionId, shell, options.Cwd);
+            logger.LogInformation("Starting terminal for connection {ConnectionId} (shell={Shell}, cwd={Cwd})",
+                LogFormatter.ToCyan(connectionId), LogFormatter.ToYellow(shell), LogFormatter.ToGreen(options.Cwd));
 
             try
             {
@@ -75,36 +70,36 @@ public class TerminalService
                             if (bytesRead == 0) break;
 
                             string output = Encoding.UTF8.GetString(buffer, 0, bytesRead);
-                            // Include the connection id and output route in the log for easier filtering when diagnosing problems
-                            _logger.LogInformation(
+                            // Log output at Debug level to avoid flooding the logs during normal operation
+                            logger.LogDebug(
                                 "[Terminal {ConnectionId}, Output Route {OutputRoute}] Output: {Output}",
-                                connectionId, outputRoute, output);
-                            await _hubContext.Clients.Client(connectionId)
+                                LogFormatter.ToCyan(connectionId), LogFormatter.ToMagenta(outputRoute), LogFormatter.ToGreen(output));
+                            await hubContext.Clients.Client(connectionId)
                                 .SendAsync(outputRoute, output, cancellationToken: cts.Token);
                         }
                     }
                     catch (OperationCanceledException)
                     {
                         // Expected when cancellation is requested - log at debug-level to avoid noise
-                        _logger.LogDebug("Read loop cancelled for connection {ConnectionId}", connectionId);
+                        logger.LogDebug("Read loop cancelled for connection {ConnectionId}", LogFormatter.ToCyan(connectionId));
                     }
                     catch (Exception ex)
                     {
-                        _logger.LogError(ex, "Unexpected error reading from PTY for connection {ConnectionId}",
-                            connectionId);
+                        logger.LogError(ex, "Unexpected error reading from PTY for connection {ConnectionId}",
+                            LogFormatter.ToBrightRed(connectionId));
                     }
                     finally
                     {
                         // Ensure cleanup after the read loop exits
-                        _logger.LogInformation(
-                            "Terminal read loop ended for connection {ConnectionId}, performing cleanup", connectionId);
+                        logger.LogInformation(
+                            "Terminal read loop ended for connection {ConnectionId}, performing cleanup", LogFormatter.ToCyan(connectionId));
                         KillTerminal(connectionId);
                     }
                 }, cts.Token);
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Failed to spawn terminal for connection {ConnectionId}", connectionId);
+                logger.LogError(ex, "Failed to spawn terminal for connection {ConnectionId}", LogFormatter.ToBrightRed(connectionId));
                 throw;
             }
         }
@@ -115,15 +110,16 @@ public class TerminalService
     {
         if (_terminals.TryGetValue(terminalId, out var terminal))
         {
-            _logger.LogInformation("Writing input to terminal {TerminalId}: {InputPreview}", terminalId,
-                input.Length > 64 ? input[..64] + "..." : input);
+            // Log input at Debug level to avoid noise
+            logger.LogDebug("Writing input to terminal {TerminalId}: {InputPreview}", LogFormatter.ToCyan(terminalId),
+                LogFormatter.ToYellow(input.Length > 32 ? input[..32] + "..." : input));
             byte[] data = Encoding.UTF8.GetBytes(input);
             await terminal.WriterStream.WriteAsync(data, 0, data.Length);
             await terminal.WriterStream.FlushAsync();
         }
         else
         {
-            _logger.LogWarning("Attempted to write to unknown terminal {TerminalId}", terminalId);
+            logger.LogWarning("Attempted to write to unknown terminal {TerminalId}", LogFormatter.ToBrightRed(terminalId));
         }
     }
 
@@ -133,12 +129,12 @@ public class TerminalService
     {
         if (_terminals.TryGetValue(connectionId, out var terminal))
         {
-            _logger.LogInformation("Resizing terminal {ConnectionId} to {Cols}x{Rows}", connectionId, cols, rows);
+            logger.LogInformation("Resizing terminal {ConnectionId} to {Cols}x{Rows}", LogFormatter.ToCyan(connectionId), LogFormatter.ToYellow(cols), LogFormatter.ToYellow(rows));
             terminal.Resize(cols, rows);
         }
         else
         {
-            _logger.LogWarning("Resize requested for unknown terminal {ConnectionId}", connectionId);
+            logger.LogWarning("Resize requested for unknown terminal {ConnectionId}", LogFormatter.ToBrightRed(connectionId));
         }
     }
 
@@ -147,13 +143,13 @@ public class TerminalService
     {
         if (_terminals.TryRemove(connectionId, out var terminal))
         {
-            _logger.LogInformation("Disposing terminal for connection {ConnectionId}", connectionId);
+            logger.LogInformation("Disposing terminal for connection {ConnectionId}", LogFormatter.ToCyan(connectionId));
             terminal.Dispose();
         }
 
         if (_cts.TryRemove(connectionId, out var cts))
         {
-            _logger.LogInformation("Cancelling read loop for connection {ConnectionId}", connectionId);
+            logger.LogInformation("Cancelling read loop for connection {ConnectionId}", LogFormatter.ToCyan(connectionId));
             cts.Cancel();
             cts.Dispose();
         }
