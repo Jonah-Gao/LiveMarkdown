@@ -1,7 +1,7 @@
 ﻿import {ListItemToken, Token, TokenType} from './types.ts';
 
 /**
- * The Lexer class is responsible for converting the raw markdown string into a stream of tokens.
+ * The Lexer class is responsible for converting the raw Markdown string into a stream of tokens.
  * It uses regular expressions to identify block-level and inline-level elements.
  */
 class Lexer {
@@ -9,17 +9,18 @@ class Lexer {
      * Rules for block-level elements (headings, lists, code blocks, etc.).
      * Order matters: rules are matched sequentially.
      */
-    private blockRules: Array<[TokenType, RegExp]> = [
-        [TokenType.CODE_BLOCK, /^```(\w*)\n([\s\S]*?)\n*```$/m],
-        [TokenType.INDENTED_CODE_BLOCK, /^( {4}|\t)(.+)(\n|$)/],
-        [TokenType.HEADING, /^(#{1,6})\s+(.+)$/m],
-        [TokenType.HR, /^ {0,3}(_{3,}|-{3,}|\*{3,})$/m],
-        [TokenType.BLOCKQUOTE, /^>\s+(.+)$/m],
+
+    private containerBlockRules: Array<[TokenType, RegExp]> = [
+        [TokenType.BLOCKQUOTE, /^ {0,3}>\s?/],
         [TokenType.LIST, /^( {0,3})([-*+])(?: {1,4}|\t|$)[\s\S]+?(?:\n{2,}(?! )(?!\1[-*+])|\n+(?=\1\d{1,9}[.)])|\n*$)/],
         [TokenType.LIST, /^( {0,3})(\d{1,9}[.)])(?: {1,4}|\t|$)[\s\S]+?(?:\n{2,}(?! )(?!\1\d{1,9}[.)])|\n+(?=\1[-*+])|\n*$)/],
-        [TokenType.PARAGRAPHBREAK, /^(\n{2,})/],
-        [TokenType.NEWLINE, /^(\n)/],
-        [TokenType.PARAGRAPH, /^([\s\S]+?)(?=\n{2,}|\n\s*(?:#{1,6}\s|>|```|[-*+]\s|\d+[.)]\s)| {4}.+|\t.+|$)/]
+    ];
+
+    private leafBlockRules: Array<[TokenType, RegExp]> = [
+        [TokenType.CODE_BLOCK, /^( {0,3})(`{3,}) *([^\s`]+)?\n?/],
+        [TokenType.HR, /^ {0,3}((_ *){3,}|(- *){3,}|(\* *){3,})(?:\n|$)/],
+        [TokenType.HEADING, /^(#{1,6})\s/],
+        // [TokenType.PARAGRAPHBREAK, /^(\n{2,})/],
     ];
 
     /**
@@ -38,73 +39,175 @@ class Lexer {
 
     private itemStartRegex: RegExp = /^( {0,3})([-*+]|\d{1,9}[.)])([ \t]+|$)/;
 
-    private specialChars: RegExp = /[#`*_\[\]!\->+\n\\]/;
-
     /**
      * Tokenizes the input string into an array of tokens.
      * This is the main entry point for the Lexer.
-     * @param input The raw markdown string.
+     * @param input The raw Markdown string.
      * @returns An array of tokens.
      */
     tokenize(input: string): Token[] {
         const tokens: Token[] = [];
-        let remaining: string = input;
 
-        while (remaining.length > 0) {
-            for (const [type, regex] of this.blockRules) {
-                const match: RegExpMatchArray | null = remaining.match(regex);
-                if (match && match.index === 0) {
-                    if (type !== TokenType.INDENTED_CODE_BLOCK) {
-                        tokens.push(this.createToken(type, match));
-                        remaining = remaining.slice(match[0].length);
-                        break;
-                    } else {
-                        let lines: string[] = [];
-                        lines.push(match[2]); // first line of indent code block
-                        remaining = remaining.slice(match[0].length);
-
-                        while (remaining.length > 0) {
-                            const indentLine = remaining.match(/^( {4}|\t)(.*?)(\n|$)/);
-
-                            if (indentLine) {
-                                // indent line
-                                lines.push(indentLine[2]);
-                                remaining = remaining.slice(indentLine[0].length);
-                            } else if (remaining.startsWith('\n')) {
-                                // empty line, check if more indent lines follow
-                                const emptyLineMatch: RegExpMatchArray | null = remaining.match(/^(\n+)/);
-                                const emptyLineCount: number = emptyLineMatch ? emptyLineMatch[0].length : 0;
-                                const afterEmpty: string = remaining.slice(emptyLineCount);
-                                const hasMoreIndent: boolean = /^(( {4}|\t)(.+)(\n|$))/.test(afterEmpty);
-                                if (hasMoreIndent) {
-                                    // indent lines after empty lines
-                                    for (let i: number = 0; i < emptyLineCount; i++) {
-                                        lines.push('');
-                                    }
-                                    remaining = afterEmpty;
-                                } else {
-                                    // no more indent lines, end of code block
-                                    break;
-                                }
-                            } else {
-                                // not an indent line or empty line, end of code block
-                                break;
-                            }
-                        }
-
-                        const rawCodeBlock = lines.join('\n');
-                        tokens.push({
-                            type: TokenType.CODE_BLOCK,
-                            raw: rawCodeBlock,
-                            text: rawCodeBlock,
-                            lang: 'text',
-                        });
-                    }
+        while (input.length > 0) {
+            for (const [type, regex] of [...this.containerBlockRules, ...this.leafBlockRules]) {
+                const match: RegExpMatchArray | null = input.match(regex);
+                if (match) {
+                    input = input.slice(match[0].length);
+                    const [token, length] = this.createToken(type, match, input);
+                    tokens.push(token);
+                    input = input.slice(length);
+                    break;
                 }
             }
+            let [token, length] = this.createToken(TokenType.PARAGRAPH, null, input);
+            tokens.push(token);
+            input = input.slice(length);
         }
 
         return tokens;
+    }
+
+    private parseLeafBlock(input: string): [tokens: Token[], length: number] {
+        const tokens: Token[] = [];
+        let totalLength: number = 0;
+
+        while (input.length > 0) {
+            for (const [type, regex] of this.leafBlockRules) {
+                const match: RegExpMatchArray | null = input.match(regex);
+                if (match) {
+                    input = input.slice(match[0].length);
+                    let [token, length] = this.createToken(type, match, input);
+                    tokens.push(token);
+                    input = input.slice(length);
+                    totalLength += match[0].length + length;
+                    break;
+                }
+            }
+            let [token, length] = this.createToken(TokenType.PARAGRAPH, null, input);
+            tokens.push(token);
+            input = input.slice(length);
+            totalLength += length;
+        }
+        return [tokens, totalLength];
+    }
+
+    private parseCodeBlock(input: string, indent: number, length: number): [result: string, length: number] {
+        let lines: string[] = []
+        let idx: number = 0
+        const regex = new RegExp(`^ {0,3}\`{${length}}\\s*\\n?$`);
+
+        while (idx < input.length) {
+            const lineEnd: number = input.indexOf('\n', idx);
+            const end: number = lineEnd === -1 ? input.length : lineEnd + 1;
+            const line: string = input.slice(idx, end);
+            let leadingSpaces = 0;
+
+            // closing fence: 最多 3 个空格 + ``` + 可选空白 + 换行
+            if (regex.test(line)) {
+                idx = end;
+                break;
+            }
+
+            while (leadingSpaces < line.length && line[leadingSpaces] === ' ') leadingSpaces++;
+            lines.push(line.slice(Math.min(leadingSpaces, indent)));
+            idx = end;
+        }
+        let code: string = lines.join('');
+        // Remove the trailing newline if it exists
+        if (code.endsWith('\n')) {
+            code = code.slice(0, -1);
+        }
+        return [code, idx];
+    }
+
+    private parseHeading(input: string): [result: string, length: number] {
+        const lineEnd: number = input.indexOf('\n');
+        const end: number = lineEnd === -1 ? input.length : lineEnd + 1;
+        const line: string = input.slice(0, end)
+        return [line.trim(), end];
+    }
+
+
+    private parseParagraph(input: string): [result: string, length: number] {
+        let lines: string[] = [];
+        let idx: number = 0;
+        while (idx < input.length) {
+            const lineEnd: number = input.indexOf('\n', idx);
+            const end: number = lineEnd === -1 ? input.length : lineEnd + 1;
+            const line: string = input.slice(idx, end);
+
+            let isBlockElement: boolean = false;
+            for (const [_, regex] of [...this.containerBlockRules, ...this.leafBlockRules]) {
+                if (regex.test(line)) {
+                    isBlockElement = true;
+                    break;
+                }
+            }
+
+            // Stop if we hit a block element (but not on first line)
+            if (isBlockElement && lines.length > 0) {
+                break;
+            }
+
+            // Stop on blank line (paragraph break)
+            if (/^\s*\n?$/.test(line) && lines.length > 0) {
+                break;
+            }
+
+            lines.push(line);
+            idx = end;
+
+            // Stop if this is the first line and it's a block element
+            if (isBlockElement && lines.length === 1) {
+                break;
+            }
+        }
+
+        return [lines.join('').trim(), idx];
+    }
+
+    private parseBlockquote(input: string): [result: Token[], length: number] {
+        let result: Token[] = [];
+        let idx: number = 0;
+        let explicits: string[] = [];
+
+        while (idx < input.length) {
+            const lineEnd: number = input.indexOf('\n', idx);
+            const end: number = lineEnd === -1 ? input.length : lineEnd + 1;
+            const line: string = input.slice(idx, end);
+
+            // empty line, stop blockquote
+            if (/^\s*\n?$/.test(line)) {
+                break;
+            }
+
+            const explicit = line.match(/^\s{0,3}>\s?(.*)\n?$/);
+            if (explicit) {
+                explicits.push(explicit[1] + '\n');
+            } else if (idx === 0) {
+                explicits.push(line);
+            } else {
+                result.push(...this.parseLeafBlock(explicits.join(''))[0]);
+                explicits = [];
+                const parsedLine: Token[] = this.parseLeafBlock(line)[0];
+                if (parsedLine[0].type == TokenType.PARAGRAPH && result[result.length - 1].type == TokenType.PARAGRAPH) {
+                    // Merge with previous paragraph
+                    const prevParagraph = result[result.length - 1];
+                    prevParagraph.raw += parsedLine[0].raw;
+                    prevParagraph.text = (prevParagraph.text || '') + (parsedLine[0].text || '');
+                    prevParagraph.tokens = this.parseInline(prevParagraph.raw);
+                } else {
+                    break;
+                }
+            }
+            idx = end;
+        }
+
+        if (explicits.length > 0) {
+            result.push(...this.parseLeafBlock(explicits.join(''))[0]);
+        }
+
+        return [result, idx];
     }
 
     /**
@@ -115,6 +218,7 @@ class Lexer {
     private parseInline(raw: string): Token[] {
         const tokens: Token[] = [];
         let remaining: string = raw;
+        let plainTextBuffer: string[] = [];
 
         while (remaining.length > 0) {
             let matched: boolean = false;
@@ -122,7 +226,16 @@ class Lexer {
             for (const [type, regex] of this.inlineRules) {
                 const match: RegExpMatchArray | null = remaining.match(regex);
                 if (match && match.index === 0) {
-                    tokens.push(this.createToken(type, match));
+                    // Flush plain text buffer before adding new token
+                    if (plainTextBuffer.length > 0) {
+                        tokens.push({
+                            type: TokenType.TEXT,
+                            raw: plainTextBuffer.join(''),
+                            text: plainTextBuffer.join(''),
+                        });
+                        plainTextBuffer = [];
+                    }
+                    tokens.push(this.createToken(type, match)[0]);
                     remaining = remaining.slice(match[0].length);
                     matched = true;
                     break;
@@ -130,11 +243,17 @@ class Lexer {
             }
 
             if (!matched) {
-                // Handle plain text
-                const nextSpecial = this.findNextSpecial(remaining);
-                tokens.push({type: TokenType.TEXT, raw: remaining.slice(0, nextSpecial)});
-                remaining = remaining.slice(nextSpecial);
+                plainTextBuffer.push(remaining.charAt(0));
+                remaining = remaining.slice(1);
             }
+        }
+        // Flush any remaining plain text
+        if (plainTextBuffer.length > 0) {
+            tokens.push({
+                type: TokenType.TEXT,
+                raw: plainTextBuffer.join(''),
+                text: plainTextBuffer.join(''),
+            });
         }
         return tokens;
     }
@@ -145,15 +264,6 @@ class Lexer {
      * @param text The text to search.
      * @returns The index of the next special character, or the length of the string if none found.
      */
-    private findNextSpecial(text: string): number {
-        const match: number = text.slice(1).search(this.specialChars);
-
-        if (match === -1) {
-            return text.length; // No special characters, return all
-        }
-
-        return match + 1; // +1 because we search from slice(1)
-    }
 
     /**
      * Parses a list block.
@@ -293,84 +403,98 @@ class Lexer {
      * Factory method to create tokens based on type and regex match.
      * @param type The type of token to create.
      * @param match The regex match result.
+     * @param input The raw Markdown string.
      * @returns The created Token.
      */
-    private createToken(type: TokenType, match: RegExpMatchArray): Token {
-        const raw: string = match[0];
-
+    private createToken(type: TokenType, match: RegExpMatchArray | null, input: string = ''): [token: Token, length: number] {
+        const raw: string = match ? match[0] : '';
+        let [result, length]: [string | Token[], number] = ['', 0];
         switch (type) {
             case TokenType.HEADING:
-                return {
+                [result, length] = this.parseHeading(input);
+                return [{
                     type,
                     raw,
-                    text: match[2],
-                    depth: match[1].length as 1 | 2 | 3 | 4 | 5 | 6,
-                };
+                    text: result,
+                    depth: match![1].length as 1 | 2 | 3 | 4 | 5 | 6,
+                    tokens: this.parseInline(result),
+                }, length];
             case TokenType.CODE_BLOCK:
-                return {
+                [result, length] = this.parseCodeBlock(input, match![1].length, match![2].length);
+                return [{
                     type,
                     raw,
-                    text: match[2],
-                    lang: match[1] || 'text',
-                };
+                    text: result,
+                    lang: match![3] || 'text',
+                }, length];
             case TokenType.CODE_INLINE:
-                return {
+                return [{
                     type,
                     raw,
-                    text: match[1],
-                };
+                    text: match![1],
+                }, 0];
             case TokenType.BOLD:
             case TokenType.ITALIC:
-                return {
+                return [{
                     type,
                     raw,
-                    text: match[1],
-                    tokens: this.parseInline(match[1]),
-                };
+                    text: match![1],
+                    tokens: this.parseInline(match![1]),
+                }, 0];
             case TokenType.LINK:
-                return {
+                return [{
                     type,
                     raw,
-                    text: match[1],
-                    href: match[2],
-                    tokens: this.parseInline(match[1]),
-                }
+                    text: match![1],
+                    href: match![2],
+                    tokens: this.parseInline(match![1]),
+                }, 0];
             case TokenType.IMAGE:
-                return {
+                return [{
                     type,
                     raw,
-                    text: match[1],
-                    href: match[2],
-                    alt: match[1],
-                };
+                    text: match![1],
+                    href: match![2],
+                    alt: match![1],
+                }, 0];
             case TokenType.PARAGRAPH:
-            case TokenType.BLOCKQUOTE:
-                return {
+                [result, length] = this.parseParagraph(input)
+                return [{
                     type,
                     raw,
-                    text: match[1],
-                    tokens: this.parseInline(match[1]),
-                };
+                    text: result,
+                    tokens: this.parseInline(result),
+                }, length];
+            case TokenType.BLOCKQUOTE:
+                [result, length] = this.parseBlockquote(input)
+                return [{
+                    type,
+                    raw,
+                    text: '',
+                    tokens: result,
+                }, length];
             case TokenType.LIST:
-                return this.parseList(match);
+                return [this.parseList(match!), 0];
 
             case TokenType.NEWLINE:
             case TokenType.SOFTBREAK:
             case TokenType.HARDBREAK:
             case TokenType.PARAGRAPHBREAK:
             case TokenType.HR:
-                return {
+                return [{
                     type,
                     raw,
-                };
+                }, 0];
             default:
-                return {
+                return [{
                     type: TokenType.TEXT,
-                    raw,
+                    raw: raw,
                     text: raw,
-                };
+                }, 0];
         }
     }
 }
 
+const lexer = new Lexer();
+lexer.tokenize("abcd\ngg");
 export {Lexer};

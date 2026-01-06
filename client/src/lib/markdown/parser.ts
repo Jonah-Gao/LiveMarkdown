@@ -67,7 +67,7 @@ class Parser {
 
         return {
             type: token.type,
-            value: token.text || token.raw,
+            value: token.text || '',
             attributes: this.extractAttributes(token),
         };
     }

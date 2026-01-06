@@ -31,9 +31,9 @@ const enum TokenType {
  */
 interface BaseToken<T extends TokenType = TokenType> {
     readonly type: T;
-    readonly raw: string; // The raw markdown string for this token
-    text?: string;        // The text content of the token (if applicable)
-    tokens?: Token[];     // Nested tokens (for block tokens that contain inline tokens)
+    raw: string;        // The raw markdown string for this token
+    text?: string;      // The text content of the token (if applicable)
+    tokens?: Token[];   // Nested tokens (for block tokens that contain inline tokens)
 }
 
 /**
