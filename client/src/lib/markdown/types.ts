@@ -13,12 +13,14 @@ const enum TokenType {
     ITALIC = 'italic',
     BOLD_ITALIC = 'bold_italic',
     LINK = 'link',
+    AUTOLINK = 'autolink',
     IMAGE = 'image',
     ULIST = 'ulist',
     OLIST = 'olist',
     LIST_ITEM = 'list_item',
     BLOCKQUOTE = 'blockquote',
     HR = 'hr',
+    ESCAPE = 'escape',
     TEXT = 'text',
     NEWLINE = 'newline',
     SOFTBREAK = 'softbreak',
@@ -65,6 +67,9 @@ interface LinkableToken<T extends TokenType> extends BaseToken<T> {
 interface LinkToken extends LinkableToken<TokenType.LINK> {
 }
 
+interface AutolinkToken extends LinkableToken<TokenType.AUTOLINK> {
+}
+
 interface ImageToken extends LinkableToken<TokenType.IMAGE> {
     readonly alt: string;
 }
@@ -97,6 +102,7 @@ type InlineTextType =
     | TokenType.ITALIC
     | TokenType.BOLD_ITALIC
     | TokenType.CODE_INLINE
+    | TokenType.ESCAPE
     | TokenType.HARDBREAK
     | TokenType.SOFTBREAK;
 
@@ -123,6 +129,7 @@ type Token =
     | CodeBlockToken
     | IndentedCodeBlockToken
     | LinkToken
+    | AutolinkToken
     | ImageToken
     | UListToken
     | OListToken
@@ -159,6 +166,7 @@ export type {
     HeadingToken,
     CodeBlockToken,
     LinkToken,
+    AutolinkToken,
     ImageToken,
     UListToken,
     OListToken,

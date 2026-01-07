@@ -26,16 +26,26 @@ class Lexer {
 
     /**
      * Rules for inline elements (bold, italic, links, etc.).
+     * Order matters: more specific patterns should come first.
      */
     private inlineRules: Array<[TokenType, RegExp]> = [
+        // Escape sequences (must be first to handle escaped characters)
+        [TokenType.ESCAPE, /\\([\\`*_{}\[\]()#+\-.!|~])/],
         [TokenType.HARDBREAK, / {2,}\n/],
         [TokenType.SOFTBREAK, /\n/],
-        [TokenType.CODE_INLINE, /`([^`]+)`/],
-        [TokenType.BOLD_ITALIC, /\*\*\*([\s\S]+?)\*\*\*/],
-        [TokenType.BOLD, /\*\*(?!\*)([\s\S]+?)\*\*(?!\*)/],
-        [TokenType.ITALIC, /\*(?!\*)([\s\S]+?)\*(?!\*)/],
-        [TokenType.IMAGE, /!\[([^\]]*)]\(([^)]+)\)/],
-        [TokenType.LINK, /\[([^\]]+)]\(([^)]+)\)/],
+        // Code (highest priority to avoid conflicts)
+        [TokenType.CODE_INLINE, /`([^`\n]+)`/],
+        [TokenType.BOLD_ITALIC, /\*\*\*([^*\n]+?)\*\*\*/],
+        [TokenType.BOLD_ITALIC, /___([^_\n]+?)___/],
+        [TokenType.BOLD, /\*\*([^*\n]+?)\*\*/],
+        [TokenType.BOLD, /__([^_\n]+?)__/],
+        [TokenType.ITALIC, /\*([^*\n]+?)\*/],
+        [TokenType.ITALIC, /_([^_\n]+?)_/],
+        // Images (must come before links due to leading !)
+        [TokenType.IMAGE, /!\[([^\]]*)]\(([^)\s]+)(?:\s+"([^"]+)")?\)/],
+        [TokenType.LINK, /\[([^\]]+)]\(([^)\s]+)(?:\s+"([^"]+)")?\)/],
+        [TokenType.AUTOLINK, /<(https?:\/\/[a-zA-Z0-9][\w.-]*(?::[0-9]+)?(?:\/[^\s>]*)?)>/],
+        [TokenType.AUTOLINK, /<([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})>/],
     ];
 
 
@@ -49,6 +59,13 @@ class Lexer {
         const tokens: Token[] = [];
 
         while (input.length > 0) {
+            // Skip empty lines between block elements (CommonMark compliance)
+            const emptyLineMatch = input.match(/^(\n+)/);
+            if (emptyLineMatch && tokens.length > 0) {
+                input = input.slice(emptyLineMatch[0].length);
+                continue;
+            }
+
             let matched: boolean = false;
             for (const [type, regex] of [...this.containerBlockRules, ...this.leafBlockRules]) {
                 const match: RegExpMatchArray | null = input.match(regex);
@@ -314,7 +331,9 @@ class Lexer {
         const firstLineIdx: number = firstLineEnd === -1 ? input.length : firstLineEnd + 1;
         const line: string = input.slice(0, firstLineIdx);
         if (initialMarker === '*' || initialMarker === '-') {
-            const HR = new RegExp(`^ *(${initialMarker} *){2,}(?:\\n|$)`)
+            // Escape the special characters for regex
+            const escapedMarker = initialMarker.replace(/[*-]/g, '\\$&');
+            const HR = new RegExp(`^ *(${escapedMarker} *){2,}(?:\\n|$)`)
             if (HR.test(line)) {
                 // It's a horizontal rule, not a list
                 return [{
@@ -583,6 +602,7 @@ class Lexer {
                 }, 0];
             case TokenType.BOLD:
             case TokenType.ITALIC:
+            case TokenType.BOLD_ITALIC:
                 return [{
                     type,
                     raw,
@@ -595,7 +615,15 @@ class Lexer {
                     raw,
                     text: match![1],
                     href: match![2],
+                    title: match![3],
                     tokens: this.parseInline(match![1]),
+                }, 0];
+            case TokenType.AUTOLINK:
+                return [{
+                    type,
+                    raw,
+                    text: match![1],
+                    href: match![1],
                 }, 0];
             case TokenType.IMAGE:
                 return [{
@@ -603,6 +631,7 @@ class Lexer {
                     raw,
                     text: match![1],
                     href: match![2],
+                    title: match![3],
                     alt: match![1],
                 }, 0];
             case TokenType.PARAGRAPH:
@@ -626,12 +655,17 @@ class Lexer {
                 indent = match![1].length;
                 markerWidth = match![0].length;
                 return this.parseUnorderedList(input, marker, indent, markerWidth);
-
             case TokenType.OLIST:
                 marker = match![2];
                 indent = match![1].length;
                 markerWidth = match![0].length;
                 return this.parseOrderedList(input, marker, indent, markerWidth);
+            case TokenType.ESCAPE:
+                return [{
+                    type,
+                    raw,
+                    text: match![1],
+                }, 0];
 
             case TokenType.NEWLINE:
             case TokenType.SOFTBREAK:

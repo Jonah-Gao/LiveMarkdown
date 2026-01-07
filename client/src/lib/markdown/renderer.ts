@@ -27,8 +27,21 @@ class Renderer {
             code: n.value || ''
         })],
         [TokenType.CODE_INLINE, (n) => h('code', n.value)],
-        [TokenType.LINK, (n) => h('a', {href: n.attributes?.href}, this.renderChildren(n))],
-        [TokenType.IMAGE, (n) => h('img', {src: n.attributes?.href || '', alt: n.value || '', loading: 'lazy'})],
+        [TokenType.LINK, (n) => {
+            const props: Record<string, any> = { href: n.attributes?.href };
+            if (n.attributes?.title) props.title = n.attributes.title;
+            return h('a', props, this.renderChildren(n));
+        }],
+        [TokenType.AUTOLINK, (n) => h('a', {href: n.attributes?.href}, n.value || '')],
+        [TokenType.IMAGE, (n) => {
+            const props: Record<string, any> = {
+                src: n.attributes?.href || '',
+                alt: n.value || '',
+                loading: 'lazy'
+            };
+            if (n.attributes?.title) props.title = n.attributes.title;
+            return h('img', props);
+        }],
         [TokenType.BLOCKQUOTE, (n) => h('blockquote', this.renderChildren(n))],
         [TokenType.ULIST, (node) => {
             return h('ul', this.renderChildren(node));
@@ -62,6 +75,7 @@ class Renderer {
         [TokenType.HARDBREAK, () => h('br')],
         [TokenType.HR, () => h('hr')],
         [TokenType.PARAGRAPHBREAK, () => h('br')],
+        [TokenType.ESCAPE, (n) => h(Fragment, [n.value || ''])],
         [TokenType.TEXT, (n) => h(Fragment, [n.value || ''])],
         [TokenType.PARAGRAPH, (n) => h('p', this.renderChildren(n)) || ''],
     ]);
