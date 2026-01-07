@@ -372,7 +372,7 @@ class Lexer {
                     canClose = rightFlanking;
                 } else { // '_'
                     canOpen = leftFlanking && (!rightFlanking || this.isUnicodePunctuation(text[startPos - 1]));
-                    canClose = rightFlanking && (!leftFlanking || this.isUnicodePunctuation(text[i]));
+                    canClose = rightFlanking && (!leftFlanking || this.isUnicodePunctuation(text[startPos + count]));
                 }
 
                 delimiters.push({
@@ -455,11 +455,11 @@ class Lexer {
             const opener = delimiters[match.openerIdx];
             const closer = delimiters[match.closerIdx];
             
-            // Calculate actual positions (original pos + remaining count)
+            // Calculate actual positions
             const openerStart = opener.pos;
-            const openerEnd = opener.pos + opener.count + match.count;
+            const openerEnd = opener.pos + match.count;  // Position after matched delimiters
             const closerStart = closer.pos;
-            const closerEnd = closer.pos + closer.count + match.count;
+            const closerEnd = closer.pos + match.count;  // Position after matched delimiters
 
             // Add text before this emphasis
             if (currentPos < openerStart) {
@@ -893,8 +893,8 @@ class Lexer {
                     // Single line paragraph, check next line for setext underline
                     const nextLineStart = length;
                     const nextLineEnd = input.indexOf('\n', nextLineStart);
-                    const nextLineIdx = nextLineEnd === -1 ? input.length : nextLineEnd + 1;
-                    const nextLine = input.slice(nextLineStart, nextLineIdx);
+                    const nextLineEndWithNewline = nextLineEnd === -1 ? input.length : nextLineEnd + 1;
+                    const nextLine = input.slice(nextLineStart, nextLineEndWithNewline);
                     
                     const setextMatch = nextLine.match(/^ {0,3}(=+|-+)\s*$/);
                     if (setextMatch) {
@@ -906,7 +906,7 @@ class Lexer {
                             text: result,
                             depth: depth as 1 | 2,
                             tokens: this.parseInline(result),
-                        }, length + nextLineIdx - nextLineStart];
+                        }, length + nextLineEndWithNewline - nextLineStart];
                     }
                 }
                 

@@ -67,7 +67,6 @@ describe('Emphasis Parsing', () => {
 
 describe('Preprocessor', () => {
     const preprocessor = new Preprocessor();
-    const lexer = new Lexer();
 
     describe('Empty lines at start/end', () => {
         it('should ignore leading empty lines', () => {
