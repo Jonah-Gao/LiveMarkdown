@@ -89,13 +89,13 @@ const activeIndexBottom = ref<number | null>(null)
 const explorerVisible = ref(true)
 
 // Editor State
-const code = ref('# Hello, Monaco Editor Vue3!')
+const code = ref('# Untitled')
 const tabs = ref<Tab[]>([
     {
         id: 'untitled-1',
         name: 'Untitled',
         path: '',
-        content: '# Hello, Monaco Editor Vue3!',
+        content: '# Untitled',
         isDirty: false,
     }
 ])

@@ -14,7 +14,8 @@ const enum TokenType {
     BOLD_ITALIC = 'bold_italic',
     LINK = 'link',
     IMAGE = 'image',
-    LIST = 'list',
+    ULIST = 'ulist',
+    OLIST = 'olist',
     LIST_ITEM = 'list_item',
     BLOCKQUOTE = 'blockquote',
     HR = 'hr',
@@ -46,8 +47,11 @@ interface HeadingToken extends BaseToken<TokenType.HEADING> {
 /**
  * Token representing a code block.
  */
-interface CodeBlockToken extends BaseToken<TokenType.CODE_BLOCK | TokenType.INDENTED_CODE_BLOCK> {
+interface CodeBlockToken extends BaseToken<TokenType.CODE_BLOCK> {
     readonly lang: string; // The programming language for syntax highlighting
+}
+
+interface IndentedCodeBlockToken extends BaseToken<TokenType.INDENTED_CODE_BLOCK> {
 }
 
 /**
@@ -68,9 +72,12 @@ interface ImageToken extends LinkableToken<TokenType.IMAGE> {
 /**
  * Token representing a list (ordered or unordered).
  */
-interface ListToken extends BaseToken<TokenType.LIST> {
-    readonly ordered: boolean; // True for ordered lists (1. 2.), false for unordered (* - +)
+interface OListToken extends BaseToken<TokenType.OLIST> {
     readonly start?: number;   // Starting number for ordered lists
+    readonly loose?: boolean;  // True if list items are separated by newlines (loose list)
+}
+
+interface UListToken extends BaseToken<TokenType.ULIST> {
     readonly loose?: boolean;  // True if list items are separated by newlines (loose list)
 }
 
@@ -114,9 +121,11 @@ interface SimpleToken extends BaseToken<SimpleTokenType> {
 type Token =
     | HeadingToken
     | CodeBlockToken
+    | IndentedCodeBlockToken
     | LinkToken
     | ImageToken
-    | ListToken
+    | UListToken
+    | OListToken
     | ListItemToken
     | TextToken
     | SimpleToken;
@@ -137,10 +146,13 @@ const isCodeBlock = (token: Token): token is CodeBlockToken =>
 const isLink = (token: Token): token is LinkToken =>
     token.type === TokenType.LINK;
 
-const isList = (token: Token): token is ListToken =>
-    token.type === TokenType.LIST;
+const isUList = (token: Token): token is UListToken =>
+    token.type === TokenType.ULIST;
 
-export {TokenType, isTokenType, isHeading, isCodeBlock, isLink, isList};
+const isOList = (token: Token): token is OListToken =>
+    token.type === TokenType.OLIST;
+
+export {TokenType, isTokenType, isHeading, isCodeBlock, isLink, isUList, isOList};
 export type {
     Token,
     BaseToken,
@@ -148,7 +160,8 @@ export type {
     CodeBlockToken,
     LinkToken,
     ImageToken,
-    ListToken,
+    UListToken,
+    OListToken,
     ListItemToken,
     TextToken,
     SimpleToken

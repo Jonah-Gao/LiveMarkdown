@@ -2,6 +2,7 @@
 import {TokenType} from './types';
 import {Component, h, VNode, Fragment} from 'vue'
 import MarkdownCodeBlock from "@/components/MarkdownCodeBlock.vue";
+import MarkdownIndentedCodeBlock from "@/components/MarkdownIndentedCodeBlock.vue";
 
 
 /**
@@ -22,17 +23,22 @@ class Renderer {
         [TokenType.CODE_BLOCK, (n) => h(MarkdownCodeBlock as Component, {
             code: n.value || '', lang: n.attributes?.lang || 'text'
         })],
+        [TokenType.INDENTED_CODE_BLOCK, (n) => h(MarkdownIndentedCodeBlock as Component, {
+            code: n.value || ''
+        })],
         [TokenType.CODE_INLINE, (n) => h('code', n.value)],
         [TokenType.LINK, (n) => h('a', {href: n.attributes?.href}, this.renderChildren(n))],
         [TokenType.IMAGE, (n) => h('img', {src: n.attributes?.href || '', alt: n.value || '', loading: 'lazy'})],
         [TokenType.BLOCKQUOTE, (n) => h('blockquote', this.renderChildren(n))],
-        [TokenType.LIST, (node) => {
-            const tag = node.attributes?.ordered ? 'ol' : 'ul';
+        [TokenType.ULIST, (node) => {
+            return h('ul', this.renderChildren(node));
+        }],
+        [TokenType.OLIST, (node) => {
             const props: Record<string, any> = {};
             const start = node.attributes?.start;
             if (start && start !== 1) props.start = start;
 
-            return h(tag, props, this.renderChildren(node));
+            return h('ol', props, this.renderChildren(node));
         }],
 
         [TokenType.LIST_ITEM, (node) => {
@@ -56,7 +62,7 @@ class Renderer {
         [TokenType.HARDBREAK, () => h('br')],
         [TokenType.HR, () => h('hr')],
         [TokenType.PARAGRAPHBREAK, () => h('br')],
-        [TokenType.TEXT, (n) => h(Fragment, [n.value|| ''])],
+        [TokenType.TEXT, (n) => h(Fragment, [n.value || ''])],
         [TokenType.PARAGRAPH, (n) => h('p', this.renderChildren(n)) || ''],
     ]);
 
