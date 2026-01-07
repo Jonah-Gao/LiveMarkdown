@@ -42,7 +42,6 @@ class Lexer {
         [TokenType.CODE_BLOCK, /^( {0,3})(`{3,}) *([^\s`]+)?(?:\n|$)/],
         [TokenType.HEADING, /^(#{1,6})\s/],
         [TokenType.HR, /^ {0,3}((_ *){3,}|(- *){3,}|(\* *){3,})(?:\n|$)/],
-        // [TokenType.PARAGRAPHBREAK, /^(\n{2,})/],
     ];
 
     /**
@@ -204,6 +203,16 @@ class Lexer {
             for (const [_, regex] of [...this.containerBlockRules, ...this.leafBlockRules]) {
                 if (regex.test(line)) {
                     isBlockElement = true;
+                    break;
+                }
+            }
+
+            // Check for setext heading underline after first line
+            if (lines.length === 1 && !this.isEmptyLine(line)) {
+                const setextMatch = line.match(/^ {0,3}(=+|-+)\s*$/);
+                if (setextMatch) {
+                    // This is a setext heading - don't include the underline
+                    // Return the heading info instead of paragraph
                     break;
                 }
             }
@@ -877,7 +886,30 @@ class Lexer {
                     alt: match![1],
                 }, 0];
             case TokenType.PARAGRAPH:
-                [result, length] = this.parseParagraph(input)
+                [result, length] = this.parseParagraph(input);
+                
+                // Check if the next line is a setext heading underline
+                if (typeof result === 'string' && result.indexOf('\n') === -1) {
+                    // Single line paragraph, check next line for setext underline
+                    const nextLineStart = length;
+                    const nextLineEnd = input.indexOf('\n', nextLineStart);
+                    const nextLineIdx = nextLineEnd === -1 ? input.length : nextLineEnd + 1;
+                    const nextLine = input.slice(nextLineStart, nextLineIdx);
+                    
+                    const setextMatch = nextLine.match(/^ {0,3}(=+|-+)\s*$/);
+                    if (setextMatch) {
+                        // This is a setext heading
+                        const depth = setextMatch[1][0] === '=' ? 1 : 2;
+                        return [{
+                            type: TokenType.HEADING,
+                            raw: raw,
+                            text: result,
+                            depth: depth as 1 | 2,
+                            tokens: this.parseInline(result),
+                        }, length + nextLineIdx - nextLineStart];
+                    }
+                }
+                
                 return [{
                     type,
                     raw,
