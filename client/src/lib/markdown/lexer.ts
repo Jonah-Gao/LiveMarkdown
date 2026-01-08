@@ -1,4 +1,5 @@
 ﻿import {Token, TokenType} from './types.ts';
+import {sanitizeHtml} from './sanitize.ts';
 
 /**
  * Delimiter for emphasis parsing
@@ -988,7 +989,7 @@ class Lexer {
                 const firstLine = raw;
                 const isBlock = options.htmlBlock === true;
                 const [htmlContent, consumed] = isBlock ? this.parseHtmlBlock(input, firstLine) : [firstLine, 0];
-                const sanitized = this.sanitizeHtml(htmlContent);
+                const sanitized = sanitizeHtml(htmlContent);
                 return [{
                     type,
                     raw: htmlContent,
@@ -1043,26 +1044,6 @@ class Lexer {
         return /^\s*\n?$/.test(line);
     }
 
-    private sanitizeHtml(html: string): string {
-        try {
-            if (typeof DOMParser === 'undefined') {
-                return html.replace(/</g, '&lt;').replace(/>/g, '&gt;');
-            }
-            const parser = new DOMParser();
-            const doc = parser.parseFromString(html, 'text/html');
-            doc.querySelectorAll('script,style').forEach(el => el.remove());
-            doc.querySelectorAll('*').forEach(el => {
-                Array.from(el.attributes).forEach(attr => {
-                    if (attr.name.toLowerCase().startsWith('on')) {
-                        el.removeAttribute(attr.name);
-                    }
-                });
-            });
-            return doc.body.innerHTML;
-        } catch {
-            return '';
-        }
-    }
 }
 
 const lexer = new Lexer();

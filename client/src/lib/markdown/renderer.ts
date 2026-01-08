@@ -1,5 +1,6 @@
 ﻿import {ASTNode} from './parser';
 import {TokenType} from './types';
+import {sanitizeHtml} from './sanitize.ts';
 import {Component, h, VNode, Fragment} from 'vue'
 import MarkdownCodeBlock from "@/components/MarkdownCodeBlock.vue";
 import MarkdownIndentedCodeBlock from "@/components/MarkdownIndentedCodeBlock.vue";
@@ -80,7 +81,7 @@ class Renderer {
         [TokenType.PARAGRAPH, (n) => h('p', this.renderChildren(n)) || ''],
         [TokenType.HTML, (n) => {
             const tag = n.attributes?.block ? 'div' : 'span';
-            return h(tag, { innerHTML: this.sanitizeHtml(n.value || '') });
+            return h(tag, { innerHTML: sanitizeHtml(n.value || '') });
         }],
     ]);
 
@@ -119,27 +120,6 @@ class Renderer {
         const childrenVNodes = node.children.map(c => this.renderNode(c))
 
         return h(Fragment, childrenVNodes)
-    }
-
-    private sanitizeHtml(html: string): string {
-        try {
-            if (typeof DOMParser === 'undefined') {
-                return html.replace(/</g, '&lt;').replace(/>/g, '&gt;');
-            }
-            const parser = new DOMParser();
-            const doc = parser.parseFromString(html, 'text/html');
-            doc.querySelectorAll('script,style').forEach(el => el.remove());
-            doc.querySelectorAll('*').forEach(el => {
-                Array.from(el.attributes).forEach(attr => {
-                    if (attr.name.toLowerCase().startsWith('on')) {
-                        el.removeAttribute(attr.name);
-                    }
-                });
-            });
-            return doc.body.innerHTML;
-        } catch {
-            return '';
-        }
     }
 }
 
