@@ -6,6 +6,7 @@
 interface Delimiter {
     type: '*' | '_';
     count: number;
+    origCount: number;
     pos: number;
     canOpen: boolean;
     canClose: boolean;
@@ -378,6 +379,7 @@ class Lexer {
                 delimiters.push({
                     type: char,
                     count: count,
+                    origCount: count,
                     pos: startPos,
                     canOpen: canOpen,
                     canClose: canClose,
@@ -395,39 +397,49 @@ class Lexer {
             const closer = delimiters[closerIdx];
             if (!closer.canClose || !closer.active) continue;
 
-            // Look backwards for a matching opener
-            for (let openerIdx = closerIdx - 1; openerIdx >= 0; openerIdx--) {
-                const opener = delimiters[openerIdx];
-                if (!opener.canOpen || !opener.active || opener.type !== closer.type) continue;
+            let searchIdx = closerIdx - 1;
+            while (closer.count > 0 && closer.active) {
+                let matched = false;
 
-                // Check the "multiple of 3" rule
-                const canOpenAndClose = opener.canOpen && opener.canClose;
-                const closerCanOpenAndClose = closer.canOpen && closer.canClose;
+                // Look backwards for a matching opener
+                for (let openerIdx = searchIdx; openerIdx >= 0; openerIdx--) {
+                    const opener = delimiters[openerIdx];
+                    if (!opener.canOpen || !opener.active || opener.type !== closer.type) continue;
 
-                if (canOpenAndClose || closerCanOpenAndClose) {
-                    const totalLength = opener.count + closer.count;
-                    if (totalLength % 3 === 0 && opener.count % 3 !== 0 && closer.count % 3 !== 0) {
-                        continue;
+                    // Check the "multiple of 3" rule
+                    const canOpenAndClose = opener.canOpen && opener.canClose;
+                    const closerCanOpenAndClose = closer.canOpen && closer.canClose;
+
+                    if (canOpenAndClose || closerCanOpenAndClose) {
+                        const totalLength = opener.count + closer.count;
+                        if (totalLength % 3 === 0 && opener.count % 3 !== 0 && closer.count % 3 !== 0) {
+                            continue;
+                        }
                     }
+
+                    // Prefer strong emphasis (use 2) over regular (use 1)
+                    const useCount: number = Math.min(
+                        (opener.count >= 2 && closer.count >= 2) ? 2 : 1,
+                        opener.count,
+                        closer.count
+                    );
+
+                    matches.push({ openerIdx, closerIdx, count: useCount });
+
+                    opener.count -= useCount;
+                    closer.count -= useCount;
+
+                    if (opener.count === 0) opener.active = false;
+                    if (closer.count === 0) closer.active = false;
+
+                    matched = true;
+                    searchIdx = openerIdx - 1;
+                    break;
                 }
 
-                // Prefer strong emphasis (use 2) over regular (use 1)
-                let useCount: number;
-                if (opener.count >= 2 && closer.count >= 2) {
-                    useCount = 2;
-                } else {
-                    useCount = 1;
+                if (!matched) {
+                    break;
                 }
-
-                matches.push({ openerIdx, closerIdx, count: useCount });
-
-                opener.count -= useCount;
-                closer.count -= useCount;
-
-                if (opener.count === 0) opener.active = false;
-                if (closer.count === 0) closer.active = false;
-
-                break;
             }
         }
 
@@ -441,28 +453,63 @@ class Lexer {
             }] : [];
         }
 
-        // Sort matches by position for building tokens
-        matches.sort((a, b) => {
-            const aStart = delimiters[a.openerIdx].pos;
-            const bStart = delimiters[b.openerIdx].pos;
-            return aStart - bStart;
+        const openerUsage: Record<number, number> = {};
+        const closerUsage: Record<number, number> = {};
+
+        // First, assign concrete positions for each match so that
+        // opener characters are taken from the right side of the run
+        // and closer characters from the left side.
+        const matchesWithPositions = matches
+            .slice()
+            .sort((a, b) => {
+                const aClose = delimiters[a.closerIdx].pos;
+                const bClose = delimiters[b.closerIdx].pos;
+                if (aClose !== bClose) return aClose - bClose;
+                const aOpen = delimiters[a.openerIdx].pos;
+                const bOpen = delimiters[b.openerIdx].pos;
+                return bOpen - aOpen;
+            })
+            .map(match => {
+                const opener = delimiters[match.openerIdx];
+                const closer = delimiters[match.closerIdx];
+
+                const openerUsed = openerUsage[match.openerIdx] || 0;
+                const closerUsed = closerUsage[match.closerIdx] || 0;
+
+                // Use delimiter characters closest to the content for openers (from the right)
+                // so nested matches sharing a delimiter run allocate the inner pairs first.
+                const openerStart = opener.pos + (opener.origCount - openerUsed - match.count);
+                const openerEnd = openerStart + match.count;
+                const closerStart = closer.pos + closerUsed;
+                const closerEnd = closerStart + match.count;
+
+                openerUsage[match.openerIdx] = openerUsed + match.count;
+                closerUsage[match.closerIdx] = closerUsed + match.count;
+
+                return { ...match, openerStart, openerEnd, closerStart, closerEnd };
+            });
+
+        // Sort matches by opener position for token construction
+        matchesWithPositions.sort((a, b) => {
+            if (a.openerStart !== b.openerStart) return a.openerStart - b.openerStart;
+            return a.closerStart - b.closerStart;
         });
 
         const result: Token[] = [];
         let currentPos = 0;
 
-        for (const match of matches) {
+        for (const match of matchesWithPositions) {
             const opener = delimiters[match.openerIdx];
             const closer = delimiters[match.closerIdx];
             
             // Calculate actual positions
-            const openerStart = opener.pos;
-            const openerEnd = opener.pos + match.count;  // Position after matched delimiters
-            const closerStart = closer.pos;
-            const closerEnd = closer.pos + match.count;  // Position after matched delimiters
+            const openerStart = match.openerStart;
+            const openerEnd = match.openerEnd;  // Position after matched delimiters
+            const closerStart = match.closerStart;
+            const closerEnd = match.closerEnd;  // Position after matched delimiters
 
-            // Skip if this match is entirely within a range we've already processed
-            if (currentPos > openerStart) {
+            // Skip if this match would end at or before the text already emitted
+            if (closerEnd <= currentPos) {
                 continue;
             }
 
