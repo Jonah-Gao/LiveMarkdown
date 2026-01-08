@@ -89,6 +89,8 @@ const VIEW_MODE_BUTTONS: { value: ViewMode, icon: string, label: string }[] = [
     {value: 'preview', icon: 'visibility', label: 'Preview only'}
 ]
 
+const DEFAULT_UNTITLED_NAME = 'Untitled.md'
+
 const MIN_EXPLORER_WIDTH = 160
 const MAX_EXPLORER_WIDTH = 520
 const MIN_TERMINAL_HEIGHT = 150
@@ -107,7 +109,7 @@ const code = ref('# Untitled')
 const tabs = ref<Tab[]>([
     {
         id: 'untitled-1',
-        name: 'Untitled.md',
+        name: DEFAULT_UNTITLED_NAME,
         path: '',
         content: '# Untitled',
         isDirty: false,
@@ -327,8 +329,11 @@ function handleResizeDrag(event: MouseEvent) {
         layoutState.ExplorerWidth = clamp(resizeState.startSize + delta, MIN_EXPLORER_WIDTH, MAX_EXPLORER_WIDTH)
     } else if (resizeState.type === 'preview') {
         const delta = event.clientX - resizeState.startX
-        const newWidth = clamp(resizeState.startSize + delta, resizeState.containerWidth * MIN_PREVIEW_RATIO, resizeState.containerWidth * MAX_PREVIEW_RATIO)
-        layoutState.EditorPreviewRatio = clamp(newWidth / Math.max(resizeState.containerWidth, 1), MIN_PREVIEW_RATIO, MAX_PREVIEW_RATIO)
+        const allowedMin = resizeState.containerWidth * MIN_PREVIEW_RATIO
+        const allowedMax = resizeState.containerWidth * MAX_PREVIEW_RATIO
+        const newWidth = clamp(resizeState.startSize + delta, allowedMin, allowedMax)
+        const safeContainerWidth = Math.max(resizeState.containerWidth, 1)
+        layoutState.EditorPreviewRatio = clamp(newWidth / safeContainerWidth, MIN_PREVIEW_RATIO, MAX_PREVIEW_RATIO)
     } else if (resizeState.type === 'terminal') {
         const delta = resizeState.startY - event.clientY
         layoutState.TerminalHeight = clamp(resizeState.startSize + delta, MIN_TERMINAL_HEIGHT, MAX_TERMINAL_HEIGHT)
@@ -671,7 +676,7 @@ onBeforeUnmount(() => {
                 </div>
                 <div class="status-item">
                     <span class="material-symbols-outlined">description</span>
-                    <span>{{ activeTab?.name || 'Untitled.md' }}</span>
+                    <span>{{ activeTab?.name || DEFAULT_UNTITLED_NAME }}</span>
                 </div>
             </div>
             <div class="status-bar-right">

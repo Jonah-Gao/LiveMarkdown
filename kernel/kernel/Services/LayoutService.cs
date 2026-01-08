@@ -52,7 +52,7 @@ public class LayoutService
         }
     }
 
-    public async Task SaveAsync(PanelLayout? layout, CancellationToken cancellationToken = default)
+    public async Task SaveAsync(PanelLayout layout, CancellationToken cancellationToken = default)
     {
         var sanitized = Sanitize(layout);
 
