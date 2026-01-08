@@ -1,5 +1,6 @@
 ﻿import {ASTNode} from './parser';
 import {TokenType} from './types';
+import {sanitizeHtml} from './sanitize.ts';
 import {Component, h, VNode, Fragment} from 'vue'
 import MarkdownCodeBlock from "@/components/MarkdownCodeBlock.vue";
 import MarkdownIndentedCodeBlock from "@/components/MarkdownIndentedCodeBlock.vue";
@@ -78,6 +79,10 @@ class Renderer {
         [TokenType.ESCAPE, (n) => h(Fragment, [n.value || ''])],
         [TokenType.TEXT, (n) => h(Fragment, [n.value || ''])],
         [TokenType.PARAGRAPH, (n) => h('p', this.renderChildren(n)) || ''],
+        [TokenType.HTML, (n) => {
+            const tag = n.attributes?.block ? 'div' : 'span';
+            return h(tag, { innerHTML: sanitizeHtml(n.value || '') });
+        }],
     ]);
 
     /**
