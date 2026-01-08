@@ -448,13 +448,6 @@ class Lexer {
             return aStart - bStart;
         });
 
-        // Build a set of positions that are covered by matches to avoid reprocessing
-        const coveredRanges: Array<[number, number]> = matches.map(match => {
-            const opener = delimiters[match.openerIdx];
-            const closer = delimiters[match.closerIdx];
-            return [opener.pos, closer.pos + match.count];
-        });
-
         const result: Token[] = [];
         let currentPos = 0;
 
