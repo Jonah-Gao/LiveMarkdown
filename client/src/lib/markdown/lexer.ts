@@ -477,6 +477,7 @@ class Lexer {
                 const closerUsed = closerUsage[match.closerIdx] || 0;
 
                 // Use delimiter characters closest to the content for openers (from the right)
+                // so nested matches sharing a delimiter run allocate the inner pairs first.
                 const openerStart = opener.pos + (opener.origCount - openerUsed - match.count);
                 const openerEnd = openerStart + match.count;
                 const closerStart = closer.pos + closerUsed;
@@ -507,7 +508,7 @@ class Lexer {
             const closerStart = match.closerStart;
             const closerEnd = match.closerEnd;  // Position after matched delimiters
 
-            // Skip if this match closes before the current position (already processed)
+            // Skip if this match would end at or before the text already emitted
             if (closerEnd <= currentPos) {
                 continue;
             }
