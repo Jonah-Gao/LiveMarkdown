@@ -118,4 +118,100 @@ describe('Setext Headings', () => {
         expect(tokens[0].type).toBe(TokenType.HEADING);
         expect((tokens[0] as any).depth).toBe(2);
     });
+
+    it('should parse multi-line setext heading level 1', () => {
+        const tokens = lexer.tokenize('foo\nbar\n===');
+        expect(tokens).toHaveLength(1);
+        expect(tokens[0].type).toBe(TokenType.HEADING);
+        expect((tokens[0] as any).depth).toBe(1);
+        expect(tokens[0].text).toBe('foo\nbar');
+    });
+
+    it('should parse multi-line setext heading with hardbreak', () => {
+        const tokens = lexer.tokenize('foo  \nbar\n===');
+        expect(tokens).toHaveLength(1);
+        expect(tokens[0].type).toBe(TokenType.HEADING);
+        expect((tokens[0] as any).depth).toBe(1);
+        expect(tokens[0].text).toBe('foo  \nbar');
+        
+        // Verify hardbreak is in the inline tokens
+        const inlineTokens = tokens[0].tokens || [];
+        expect(inlineTokens.some(t => t.type === TokenType.HARDBREAK)).toBe(true);
+    });
+
+    it('should parse multi-line setext heading level 2', () => {
+        const tokens = lexer.tokenize('foo\nbar\n---');
+        expect(tokens).toHaveLength(1);
+        expect(tokens[0].type).toBe(TokenType.HEADING);
+        expect((tokens[0] as any).depth).toBe(2);
+        expect(tokens[0].text).toBe('foo\nbar');
+    });
+});
+
+describe('Nested Emphasis (Issue Fix)', () => {
+    const lexer = new Lexer();
+
+    it('should parse *(*foo*)* without duplicates', () => {
+        const tokens = lexer.tokenize('*(*foo*)*');
+        expect(tokens).toHaveLength(1);
+        expect(tokens[0].type).toBe(TokenType.PARAGRAPH);
+        
+        const inlineTokens = tokens[0].tokens || [];
+        // Should have exactly 1 top-level italic token (not duplicates)
+        expect(inlineTokens.length).toBe(1);
+        expect(inlineTokens[0].type).toBe(TokenType.ITALIC);
+        expect(inlineTokens[0].text).toBe('(*foo*)');
+    });
+
+    it('should parse **foo *bar* baz** without duplicates', () => {
+        const tokens = lexer.tokenize('**foo *bar* baz**');
+        expect(tokens).toHaveLength(1);
+        expect(tokens[0].type).toBe(TokenType.PARAGRAPH);
+        
+        const inlineTokens = tokens[0].tokens || [];
+        // Should have exactly 1 bold token (not duplicates)
+        expect(inlineTokens.length).toBe(1);
+        expect(inlineTokens[0].type).toBe(TokenType.BOLD);
+        expect(inlineTokens[0].text).toBe('foo *bar* baz');
+    });
+
+    it('should parse *foo *bar* baz* without duplicates', () => {
+        const tokens = lexer.tokenize('*foo *bar* baz*');
+        expect(tokens).toHaveLength(1);
+        expect(tokens[0].type).toBe(TokenType.PARAGRAPH);
+        
+        const inlineTokens = tokens[0].tokens || [];
+        // Should have exactly 1 italic token (not duplicates)
+        expect(inlineTokens.length).toBe(1);
+        expect(inlineTokens[0].type).toBe(TokenType.ITALIC);
+        expect(inlineTokens[0].text).toBe('foo *bar* baz');
+    });
+
+    it('should parse *foo**bar*** correctly', () => {
+        const tokens = lexer.tokenize('*foo**bar***');
+        expect(tokens).toHaveLength(1);
+        expect(tokens[0].type).toBe(TokenType.PARAGRAPH);
+        
+        const inlineTokens = tokens[0].tokens || [];
+        // Expected: text "*foo", bold "bar", text "*", text "*"
+        expect(inlineTokens.length).toBe(4);
+        expect(inlineTokens[0].type).toBe(TokenType.TEXT);
+        expect(inlineTokens[0].text).toBe('*foo');
+        expect(inlineTokens[1].type).toBe(TokenType.BOLD);
+        expect(inlineTokens[1].text).toBe('bar');
+    });
+
+    it('should parse **foo*bar*** correctly', () => {
+        const tokens = lexer.tokenize('**foo*bar***');
+        expect(tokens).toHaveLength(1);
+        expect(tokens[0].type).toBe(TokenType.PARAGRAPH);
+        
+        const inlineTokens = tokens[0].tokens || [];
+        // Expected: text "**foo", italic "bar", text "**", text "**"
+        expect(inlineTokens.length).toBe(4);
+        expect(inlineTokens[0].type).toBe(TokenType.TEXT);
+        expect(inlineTokens[0].text).toBe('**foo');
+        expect(inlineTokens[1].type).toBe(TokenType.ITALIC);
+        expect(inlineTokens[1].text).toBe('bar');
+    });
 });
