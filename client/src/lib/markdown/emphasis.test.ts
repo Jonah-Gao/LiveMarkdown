@@ -193,12 +193,15 @@ describe('Nested Emphasis (Issue Fix)', () => {
         expect(tokens[0].type).toBe(TokenType.PARAGRAPH);
         
         const inlineTokens = tokens[0].tokens || [];
-        // Expected: text "*foo", bold "bar", text "*", text "*"
-        expect(inlineTokens.length).toBe(4);
-        expect(inlineTokens[0].type).toBe(TokenType.TEXT);
-        expect(inlineTokens[0].text).toBe('*foo');
-        expect(inlineTokens[1].type).toBe(TokenType.BOLD);
-        expect(inlineTokens[1].text).toBe('bar');
+        // Expected: emphasis wrapping strong per CommonMark rules
+        expect(inlineTokens.length).toBe(1);
+        expect(inlineTokens[0].type).toBe(TokenType.ITALIC);
+
+        const inner = inlineTokens[0].tokens || [];
+        expect(inner[0].type).toBe(TokenType.TEXT);
+        expect(inner[0].text).toBe('foo');
+        expect(inner[1].type).toBe(TokenType.BOLD);
+        expect(inner[1].text).toBe('bar');
     });
 
     it('should parse **foo*bar*** correctly', () => {
@@ -207,11 +210,48 @@ describe('Nested Emphasis (Issue Fix)', () => {
         expect(tokens[0].type).toBe(TokenType.PARAGRAPH);
         
         const inlineTokens = tokens[0].tokens || [];
-        // Expected: text "**foo", italic "bar", text "**", text "**"
-        expect(inlineTokens.length).toBe(4);
-        expect(inlineTokens[0].type).toBe(TokenType.TEXT);
-        expect(inlineTokens[0].text).toBe('**foo');
-        expect(inlineTokens[1].type).toBe(TokenType.ITALIC);
-        expect(inlineTokens[1].text).toBe('bar');
+        // Expected: strong wrapping emphasis per CommonMark rules
+        expect(inlineTokens.length).toBe(1);
+        expect(inlineTokens[0].type).toBe(TokenType.BOLD);
+
+        const inner = inlineTokens[0].tokens || [];
+        expect(inner[0].type).toBe(TokenType.TEXT);
+        expect(inner[0].text).toBe('foo');
+        expect(inner[1].type).toBe(TokenType.ITALIC);
+        expect(inner[1].text).toBe('bar');
+    });
+
+    it('should parse ***foo** bar* with nested strong inside emphasis', () => {
+        const tokens = lexer.tokenize('***foo** bar*');
+        expect(tokens).toHaveLength(1);
+        expect(tokens[0].type).toBe(TokenType.PARAGRAPH);
+
+        const inlineTokens = tokens[0].tokens || [];
+        expect(inlineTokens.length).toBe(1);
+        expect(inlineTokens[0].type).toBe(TokenType.ITALIC);
+        expect(inlineTokens[0].text).toBe('**foo** bar');
+
+        const innerTokens = inlineTokens[0].tokens || [];
+        expect(innerTokens[0].type).toBe(TokenType.BOLD);
+        expect(innerTokens[0].text).toBe('foo');
+        expect(innerTokens[1].type).toBe(TokenType.TEXT);
+        expect(innerTokens[1].text).toBe(' bar');
+    });
+
+    it('should parse *foo **bar*** with emphasis wrapping strong', () => {
+        const tokens = lexer.tokenize('*foo **bar***');
+        expect(tokens).toHaveLength(1);
+        expect(tokens[0].type).toBe(TokenType.PARAGRAPH);
+
+        const inlineTokens = tokens[0].tokens || [];
+        expect(inlineTokens.length).toBe(1);
+        expect(inlineTokens[0].type).toBe(TokenType.ITALIC);
+        expect(inlineTokens[0].text).toBe('foo **bar**');
+
+        const innerTokens = inlineTokens[0].tokens || [];
+        expect(innerTokens[0].type).toBe(TokenType.TEXT);
+        expect(innerTokens[0].text).toBe('foo ');
+        expect(innerTokens[1].type).toBe(TokenType.BOLD);
+        expect(innerTokens[1].text).toBe('bar');
     });
 });
