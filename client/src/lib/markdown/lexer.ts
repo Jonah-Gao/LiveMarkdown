@@ -207,8 +207,8 @@ class Lexer {
                 }
             }
 
-            // Check for setext heading underline after first line
-            if (lines.length === 1 && !this.isEmptyLine(line)) {
+            // Check for setext heading underline after any lines
+            if (lines.length >= 1 && !this.isEmptyLine(line)) {
                 const setextMatch = line.match(/^ {0,3}(=+|-+)\s*$/);
                 if (setextMatch) {
                     // This is a setext heading - don't include the underline
@@ -448,6 +448,13 @@ class Lexer {
             return aStart - bStart;
         });
 
+        // Build a set of positions that are covered by matches to avoid reprocessing
+        const coveredRanges: Array<[number, number]> = matches.map(match => {
+            const opener = delimiters[match.openerIdx];
+            const closer = delimiters[match.closerIdx];
+            return [opener.pos, closer.pos + match.count];
+        });
+
         const result: Token[] = [];
         let currentPos = 0;
 
@@ -460,6 +467,11 @@ class Lexer {
             const openerEnd = opener.pos + match.count;  // Position after matched delimiters
             const closerStart = closer.pos;
             const closerEnd = closer.pos + match.count;  // Position after matched delimiters
+
+            // Skip if this match is entirely within a range we've already processed
+            if (currentPos > openerStart) {
+                continue;
+            }
 
             // Add text before this emphasis
             if (currentPos < openerStart) {
@@ -889,8 +901,7 @@ class Lexer {
                 [result, length] = this.parseParagraph(input);
                 
                 // Check if the next line is a setext heading underline
-                if (typeof result === 'string' && result.indexOf('\n') === -1) {
-                    // Single line paragraph, check next line for setext underline
+                if (typeof result === 'string') {
                     const nextLineStart = length;
                     const nextLineEnd = input.indexOf('\n', nextLineStart);
                     const nextLineEndWithNewline = nextLineEnd === -1 ? input.length : nextLineEnd + 1;
