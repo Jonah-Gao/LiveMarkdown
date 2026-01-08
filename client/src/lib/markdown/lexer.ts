@@ -418,8 +418,11 @@ class Lexer {
                     }
 
                     // Prefer strong emphasis (use 2) over regular (use 1)
-                    let useCount: number = (opener.count >= 2 && closer.count >= 2) ? 2 : 1;
-                    useCount = Math.min(useCount, opener.count, closer.count);
+                    const useCount: number = Math.min(
+                        (opener.count >= 2 && closer.count >= 2) ? 2 : 1,
+                        opener.count,
+                        closer.count
+                    );
 
                     matches.push({ openerIdx, closerIdx, count: useCount });
 
@@ -473,6 +476,7 @@ class Lexer {
                 const openerUsed = openerUsage[match.openerIdx] || 0;
                 const closerUsed = closerUsage[match.closerIdx] || 0;
 
+                // Use delimiter characters closest to the content for openers (from the right)
                 const openerStart = opener.pos + (opener.origCount - openerUsed - match.count);
                 const openerEnd = openerStart + match.count;
                 const closerStart = closer.pos + closerUsed;
@@ -503,7 +507,7 @@ class Lexer {
             const closerStart = match.closerStart;
             const closerEnd = match.closerEnd;  // Position after matched delimiters
 
-            // Skip if this match is entirely within a range we've already processed
+            // Skip if this match closes before the current position (already processed)
             if (closerEnd <= currentPos) {
                 continue;
             }
