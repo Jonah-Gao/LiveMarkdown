@@ -109,6 +109,7 @@ body {
     display: flex;
     flex: 1;
     overflow: hidden;
+    position: relative;
 }
 
 /* ===========================================
@@ -118,9 +119,22 @@ body {
     display: block;
     width: 240px;
     min-width: 200px;
+    flex-shrink: 0;
     border-right: 1px solid var(--widget-border-color);
     background-color: var(--bg-tertiary);
     transition: width var(--transition-normal);
+}
+
+.vertical-resizer {
+    width: 6px;
+    cursor: col-resize;
+    background-color: transparent;
+    border-right: 1px solid var(--widget-border-color);
+    flex-shrink: 0;
+}
+
+.vertical-resizer:hover {
+    background-color: rgba(255, 255, 255, 0.04);
 }
 
 .tool-bar {
@@ -267,11 +281,18 @@ body {
     height: 35px;
     background-color: var(--bg-tertiary);
     border-bottom: 1px solid var(--widget-border-color);
+    overflow: hidden;
+    align-items: stretch;
+}
+
+.tab-list {
+    display: flex;
+    flex: 1;
     overflow-x: auto;
     scrollbar-width: none;
 }
 
-.tab-bar::-webkit-scrollbar {
+.tab-list::-webkit-scrollbar {
     display: none;
 }
 
@@ -359,6 +380,42 @@ body {
     font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 16;
 }
 
+.tab-view-toggle {
+    display: flex;
+    align-items: center;
+    padding: 0 8px;
+    gap: 4px;
+    border-left: 1px solid var(--widget-border-color);
+    background-color: var(--bg-tertiary);
+}
+
+.tab-view-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 30px;
+    height: 30px;
+    border-radius: var(--border-radius-sm);
+    border: 1px solid var(--widget-border-color);
+    background-color: transparent;
+    cursor: pointer;
+    color: var(--text-secondary);
+    transition: background-color var(--transition-fast), color var(--transition-fast), border-color var(--transition-fast);
+    padding: 0;
+}
+
+.tab-view-btn:hover {
+    color: var(--text-primary);
+    border-color: var(--text-muted);
+    background-color: var(--button-hover);
+}
+
+.tab-view-btn.active {
+    color: var(--text-primary);
+    border-color: var(--accent-color);
+    background-color: var(--accent-color-muted);
+}
+
 /* ===========================================
    BUTTONS & CONTROLS
    =========================================== */
@@ -420,12 +477,13 @@ button.primary:hover {
     flex: 1;
     flex-direction: row;
     overflow: hidden;
+    align-items: stretch;
 }
 
 .editor-main {
     display: flex;
-    width: 50%;
-    border-right: 1px solid var(--widget-border-color);
+    flex: 1 1 auto;
+    min-width: 0;
 }
 
 /* ===========================================
@@ -434,9 +492,22 @@ button.primary:hover {
 .preview-main {
     display: flex;
     flex-direction: column;
-    width: 50%;
+    flex: 1 1 auto;
+    min-width: 0;
     background-color: var(--bg-secondary);
     overflow: hidden;
+}
+
+.split-resizer {
+    width: 6px;
+    cursor: col-resize;
+    background-color: transparent;
+    border-left: 1px solid var(--widget-border-color);
+    border-right: 1px solid var(--widget-border-color);
+}
+
+.split-resizer:hover {
+    background-color: rgba(255, 255, 255, 0.04);
 }
 
 .markdown-body {
@@ -454,12 +525,23 @@ button.primary:hover {
 .terminal-container {
     display: flex;
     flex-direction: column;
-    height: 250px;
     min-height: 150px;
-    max-height: 50vh;
+    max-height: 80vh;
     background-color: var(--bg-tertiary);
-    border-top: 1px solid var(--widget-border-color);
     overflow: hidden;
+}
+
+.horizontal-resizer {
+    height: 6px;
+    cursor: row-resize;
+    background-color: transparent;
+    border-top: 1px solid var(--widget-border-color);
+    border-bottom: 1px solid var(--widget-border-color);
+    flex-shrink: 0;
+}
+
+.horizontal-resizer:hover {
+    background-color: rgba(255, 255, 255, 0.04);
 }
 
 .terminal-title-bar {
