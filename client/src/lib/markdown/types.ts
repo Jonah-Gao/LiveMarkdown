@@ -137,29 +137,7 @@ type Token =
     | TextToken
     | SimpleToken;
 
-// Type guard utility function
-const isTokenType = <T extends Token>(
-    token: Token,
-    type: T['type']
-): token is T => token.type === type;
-
-// Common type guards
-const isHeading = (token: Token): token is HeadingToken =>
-    token.type === TokenType.HEADING;
-
-const isCodeBlock = (token: Token): token is CodeBlockToken =>
-    token.type === TokenType.CODE_BLOCK;
-
-const isLink = (token: Token): token is LinkToken =>
-    token.type === TokenType.LINK;
-
-const isUList = (token: Token): token is UListToken =>
-    token.type === TokenType.ULIST;
-
-const isOList = (token: Token): token is OListToken =>
-    token.type === TokenType.OLIST;
-
-export {TokenType, isTokenType, isHeading, isCodeBlock, isLink, isUList, isOList};
+export {TokenType};
 export type {
     Token,
     BaseToken,
