@@ -43,6 +43,7 @@ class Lexer {
         [TokenType.CODE_BLOCK, /^( {0,3})(`{3,}) *([^\s`]+)?(?:\n|$)/],
         [TokenType.HEADING, /^(#{1,6})\s/],
         [TokenType.HR, /^ {0,3}((_ *){3,}|(- *){3,}|(\* *){3,})(?:\n|$)/],
+        [TokenType.HTML, /^ {0,3}<[A-Za-z!/?][^\n]*\n?/],
     ];
 
     /**
@@ -53,7 +54,7 @@ class Lexer {
     private inlineRules: Array<[TokenType, RegExp]> = [
         // Escape sequences (must be first to handle escaped characters)
         [TokenType.ESCAPE, /\\([\\`*_{}\[\]()#+\-.!|~])/],
-        [TokenType.HARDBREAK, / {2,}\n/],
+        [TokenType.HARDBREAK, /(?: {2,}|\\)\n/],
         [TokenType.SOFTBREAK, /\n/],
         // Code (highest priority to avoid conflicts)
         [TokenType.CODE_INLINE, /`([^`\n]+)`/],
@@ -62,6 +63,7 @@ class Lexer {
         [TokenType.LINK, /\[([^\]]+)]\(([^)\s]+)(?:\s+"([^"]+)")?\)/],
         [TokenType.AUTOLINK, /<(https?:\/\/[a-zA-Z0-9][\w.-]*(?::[0-9]+)?(?:\/[^\s>]*)?)>/],
         [TokenType.AUTOLINK, /<([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})>/],
+        [TokenType.HTML, /<([A-Za-z][\w:-]*)(?:\s[^>]*)?>([\s\S]*?)<\/\1\s*>|<(?:!--[\s\S]*?--|\/?[A-Za-z][^>]*?>)/],
     ];
 
 
@@ -87,7 +89,7 @@ class Lexer {
                 const match: RegExpMatchArray | null = input.match(regex);
                 if (match) {
                     input = input.slice(match[0].length);
-                    const [token, length] = this.createToken(type, match, input);
+                    const [token, length] = this.createToken(type, match, input, { htmlBlock: type === TokenType.HTML });
                     tokens.push(token);
                     input = input.slice(length);
                     matched = true;
@@ -113,7 +115,7 @@ class Lexer {
                 const match: RegExpMatchArray | null = input.match(regex);
                 if (match) {
                     input = input.slice(match[0].length);
-                    let [token, length] = this.createToken(type, match, input);
+                    let [token, length] = this.createToken(type, match, input, { htmlBlock: type === TokenType.HTML });
                     tokens.push(token);
                     input = input.slice(length);
                     totalLength += match[0].length + length;
@@ -189,6 +191,26 @@ class Lexer {
         const end: number = lineEnd === -1 ? input.length : lineEnd + 1;
         const line: string = input.slice(0, end)
         return [line.trim(), end];
+    }
+
+    private parseHtmlBlock(input: string, firstLine: string): [result: string, length: number] {
+        const lines: string[] = [firstLine];
+        let idx = 0;
+
+        while (idx < input.length) {
+            const lineEnd: number = input.indexOf('\n', idx);
+            const end: number = lineEnd === -1 ? input.length : lineEnd + 1;
+            const line: string = input.slice(idx, end);
+
+            if (this.isEmptyLine(line)) {
+                break;
+            }
+
+            lines.push(line);
+            idx = end;
+        }
+
+        return [lines.join(''), idx];
     }
 
 
@@ -571,41 +593,36 @@ class Lexer {
     private parseInline(raw: string): Token[] {
         const tokens: Token[] = [];
         let remaining: string = raw;
-        let plainTextBuffer: string[] = [];
 
         while (remaining.length > 0) {
-            let matched: boolean = false;
+            let bestMatch: RegExpMatchArray | null = null;
+            let bestType: TokenType | null = null;
+            let bestIndex: number = Number.MAX_SAFE_INTEGER;
 
-            // Try to match non-emphasis inline rules first
             for (const [type, regex] of this.inlineRules) {
-                const match: RegExpMatchArray | null = remaining.match(regex);
-                if (match && match.index === 0) {
-                    // Flush plain text buffer before adding new token
-                    if (plainTextBuffer.length > 0) {
-                        // Parse emphasis in the accumulated text
-                        const emphasisTokens = this.parseEmphasis(plainTextBuffer.join(''));
-                        tokens.push(...emphasisTokens);
-                        plainTextBuffer = [];
-                    }
-                    tokens.push(this.createToken(type, match)[0]);
-                    remaining = remaining.slice(match[0].length);
-                    matched = true;
-                    break;
+                regex.lastIndex = 0;
+                const match = regex.exec(remaining);
+                if (match && match.index < bestIndex) {
+                    bestMatch = match;
+                    bestType = type;
+                    bestIndex = match.index;
                 }
             }
 
-            if (!matched) {
-                plainTextBuffer.push(remaining.charAt(0));
-                remaining = remaining.slice(1);
+            if (!bestMatch || bestType === null) {
+                tokens.push(...this.parseEmphasis(remaining));
+                break;
             }
+
+            if (bestIndex > 0) {
+                const prefix = remaining.slice(0, bestIndex);
+                tokens.push(...this.parseEmphasis(prefix));
+            }
+
+            tokens.push(this.createToken(bestType, bestMatch)[0]);
+            remaining = remaining.slice(bestIndex + bestMatch[0].length);
         }
-        
-        // Flush any remaining plain text with emphasis parsing
-        if (plainTextBuffer.length > 0) {
-            const emphasisTokens = this.parseEmphasis(plainTextBuffer.join(''));
-            tokens.push(...emphasisTokens);
-        }
-        
+
         return tokens;
     }
 
@@ -866,7 +883,7 @@ class Lexer {
      * @param input The raw Markdown string.
      * @returns The created Token.
      */
-    private createToken(type: TokenType, match: RegExpMatchArray | null, input: string = ''): [token: Token, length: number] {
+    private createToken(type: TokenType, match: RegExpMatchArray | null, input: string = '', options: { htmlBlock?: boolean } = {}): [token: Token, length: number] {
         const raw: string = match ? match[0] : '';
         let marker: string;
         let indent: number;
@@ -967,6 +984,18 @@ class Lexer {
                     text: result,
                     tokens: this.parseInline(result),
                 }, length];
+            case TokenType.HTML: {
+                const firstLine = raw;
+                const isBlock = options.htmlBlock === true;
+                const [htmlContent, consumed] = isBlock ? this.parseHtmlBlock(input, firstLine) : [firstLine, 0];
+                const sanitized = this.sanitizeHtml(htmlContent);
+                return [{
+                    type,
+                    raw: htmlContent,
+                    text: sanitized,
+                    block: isBlock
+                }, consumed];
+            }
             case TokenType.BLOCKQUOTE:
                 [result, length] = this.parseBlockquote(input)
                 return [{
@@ -1012,6 +1041,27 @@ class Lexer {
 
     private isEmptyLine(line: string): boolean {
         return /^\s*\n?$/.test(line);
+    }
+
+    private sanitizeHtml(html: string): string {
+        try {
+            if (typeof DOMParser === 'undefined') {
+                return html.replace(/</g, '&lt;').replace(/>/g, '&gt;');
+            }
+            const parser = new DOMParser();
+            const doc = parser.parseFromString(html, 'text/html');
+            doc.querySelectorAll('script,style').forEach(el => el.remove());
+            doc.querySelectorAll('*').forEach(el => {
+                Array.from(el.attributes).forEach(attr => {
+                    if (attr.name.toLowerCase().startsWith('on')) {
+                        el.removeAttribute(attr.name);
+                    }
+                });
+            });
+            return doc.body.innerHTML;
+        } catch {
+            return '';
+        }
     }
 }
 

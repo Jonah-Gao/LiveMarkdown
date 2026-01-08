@@ -26,6 +26,7 @@ const enum TokenType {
     SOFTBREAK = 'softbreak',
     HARDBREAK = 'hardbreak',
     PARAGRAPHBREAK = 'paragraphbreak',
+    HTML = 'html',
 }
 
 /**
@@ -117,10 +118,15 @@ type SimpleTokenType =
     | TokenType.PARAGRAPH
     | TokenType.BODY
     | TokenType.PARAGRAPHBREAK
-    | TokenType.NEWLINE;
+    | TokenType.NEWLINE
+    | TokenType.HTML;
 
 interface SimpleToken extends BaseToken<SimpleTokenType> {
     readonly type: SimpleTokenType;
+}
+
+interface HtmlToken extends BaseToken<TokenType.HTML> {
+    readonly block?: boolean;
 }
 
 // Union type
@@ -135,7 +141,8 @@ type Token =
     | OListToken
     | ListItemToken
     | TextToken
-    | SimpleToken;
+    | SimpleToken
+    | HtmlToken;
 
 export {TokenType};
 export type {
@@ -150,5 +157,6 @@ export type {
     OListToken,
     ListItemToken,
     TextToken,
-    SimpleToken
+    SimpleToken,
+    HtmlToken
 };
