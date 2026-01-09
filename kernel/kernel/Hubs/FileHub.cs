@@ -18,4 +18,16 @@ public class FileHub(FileService fileService, ILogger<FileHub> logger) : Hub
         logger.LogInformation("Creating tab for file: {FilePath}", LogFormatter.ToGreen(filePath));
         return fileService.StreamTabAsync(fileName, filePath);
     }
+
+    public IAsyncEnumerable<FileService.FileNode> QuickScanAsync(string dirPath, int maxDepth = 1)
+    {
+        logger.LogDebug("Quick scanning directory: {DirPath}", LogFormatter.ToGreen(dirPath));
+        return fileService.QuickScanAsync(dirPath, maxDepth);
+    }
+
+    public IAsyncEnumerable<FileService.FileIndexEntry> DeepIndexAsync(string dirPath)
+    {
+        logger.LogInformation("Starting deep index for: {DirPath}", LogFormatter.ToGreen(dirPath));
+        return fileService.DeepIndexAsync(dirPath);
+    }
 }

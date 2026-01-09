@@ -1,6 +1,6 @@
 ﻿<script setup lang="ts">
 // ==================== IMPORTS ====================
-import {computed, onBeforeUnmount, onMounted, reactive, ref, watch} from 'vue'
+import {computed, onBeforeUnmount, onMounted, provide, reactive, ref, watch} from 'vue'
 import {Terminal} from '@xterm/xterm'
 import {FitAddon} from '@xterm/addon-fit'
 import '@xterm/xterm/css/xterm.css'
@@ -14,6 +14,7 @@ import {kernelConnection} from "@/services/kernelSignalr.ts";
 import {layoutConnection} from "@/services/layoutSignalr.ts";
 import {theme} from "@/styles/GithubTerminalTheme.ts";
 import SIGNALR_CONFIG_JSON from '@/config/signalr.json'
+import {v4 as uuidv4} from "uuid";
 
 // ==================== TYPES ====================
 interface FileNode {
@@ -23,6 +24,15 @@ interface FileNode {
     isDirectory: boolean
     children?: FileNode[]
     expanded?: boolean
+}
+
+interface FileIndexEntry {
+    name: string
+    path: string
+    extension: string
+    isDirectory: boolean
+    parentPath?: string
+    depth: number
 }
 
 interface Tab {
@@ -65,10 +75,16 @@ const TERMINAL_CONFIG = {
     convertEol: true,
 }
 
+const RUN_TERMINAL_CONFIG = {
+    ...TERMINAL_CONFIG,
+    rows: 14
+}
+
 const EDITOR_OPTIONS = {
     fontSize: 14,
     minimap: {enabled: true},
-    automaticLayout: true
+    automaticLayout: true,
+    wordWrap: 'on'
 }
 
 const SIDEBAR_BUTTONS = {
@@ -85,7 +101,7 @@ const SIDEBAR_BUTTONS = {
 
 const VIEW_MODE_BUTTONS: { value: ViewMode, icon: string, label: string }[] = [
     {value: 'code', icon: 'code', label: 'Code only'},
-    {value: 'split', icon: 'splitscreen', label: 'Code & Preview'},
+    {value: 'split', icon: 'split_scene', label: 'Code & Preview'},
     {value: 'preview', icon: 'visibility', label: 'Preview only'}
 ]
 
@@ -97,6 +113,35 @@ const MIN_TERMINAL_HEIGHT = 150
 const MAX_TERMINAL_HEIGHT = 900
 const MIN_PREVIEW_RATIO = 0.15
 const MAX_PREVIEW_RATIO = 0.85
+
+const LANGUAGE_BY_EXTENSION: Record<string, string> = {
+    '.ts': 'typescript',
+    '.tsx': 'typescript',
+    '.js': 'javascript',
+    '.jsx': 'javascript',
+    '.json': 'json',
+    '.py': 'python',
+    '.cs': 'csharp',
+    '.cpp': 'cpp',
+    '.c': 'c',
+    '.java': 'java',
+    '.rb': 'ruby',
+    '.go': 'go',
+    '.rs': 'rust',
+    '.html': 'html',
+    '.css': 'css',
+    '.scss': 'scss',
+    '.md': 'markdown',
+    '.mdx': 'markdown',
+    '.sql': 'sql',
+    '.yml': 'yaml',
+    '.yaml': 'yaml',
+    '.sh': 'shell',
+    '.ps1': 'powershell',
+    '.vue': 'vue'
+}
+
+const RUN_TERMINAL_KEY = 'runTerminal'
 
 // ==================== STATE ====================
 // UI State
@@ -133,11 +178,15 @@ const rootDirectory = ref('E:\\CS_NEA_Project\\test')
 
 // Terminal State
 const terminal = ref<HTMLElement | null>(null)
+const runTerminal = ref<HTMLElement | null>(null)
 const explorerPane = ref<HTMLElement | null>(null)
 const editorPane = ref<HTMLElement | null>(null)
 const workspaceWrapper = ref<HTMLElement | null>(null)
 let xterm: Terminal
 let fitAddon: FitAddon
+let runXterm: Terminal | null = null
+let runFitAddon: FitAddon | null = null
+const runTerminalId = uuidv4()
 
 const resizeState = reactive({
     type: null as 'explorer' | 'preview' | 'terminal' | null,
@@ -146,6 +195,7 @@ const resizeState = reactive({
     startSize: 0,
     containerWidth: 0
 })
+let deepIndexSubscription: signalR.ISubscription<FileIndexEntry> | null = null
 
 // ==================== SIGNALR CONNECTIONS ====================
 const terminalConnection = new signalR.HubConnectionBuilder()
@@ -169,11 +219,22 @@ const isMarkdownTab = computed(() => {
     return name.endsWith('.md') || path.endsWith('.md')
 })
 const showExplorer = computed(() => activeIndexTop.value === 0 && explorerVisible.value)
+const showRunTerminal = computed(() => activeIndexBottom.value === 0)
 const showTerminal = computed(() => activeIndexBottom.value === 1)
+const showTerminalArea = computed(() => showTerminal.value || showRunTerminal.value)
 const showPreviewPane = computed(() => isMarkdownTab.value && currentViewMode.value !== 'code')
 const showCodePane = computed(() => !isMarkdownTab.value || currentViewMode.value !== 'preview')
 const explorerStyle = computed(() => ({width: `${layoutState.ExplorerWidth}px`}))
 const terminalStyle = computed(() => ({height: `${layoutState.TerminalHeight}px`}))
+const currentLanguage = computed(() => {
+    const name = (activeTab.value?.path || activeTab.value?.name || '').toLowerCase()
+    const extIndex = name.lastIndexOf('.')
+    const ext = extIndex >= 0 ? name.slice(extIndex) : ''
+    if (ext && LANGUAGE_BY_EXTENSION[ext]) {
+        return LANGUAGE_BY_EXTENSION[ext]
+    }
+    return isMarkdownTab.value ? 'markdown' : 'plaintext'
+})
 const editorPaneStyle = computed(() => {
     if (!showCodePane.value) {
         return {display: 'none'}
@@ -219,7 +280,89 @@ function handleResize() {
     if (fitAddon) {
         fitAddon.fit()
     }
+    if (runFitAddon) {
+        runFitAddon.fit()
+    }
 }
+
+// ==================== RUN TERMINAL ====================
+function ensureRunTerminal() {
+    if (runXterm || !runTerminal.value) {
+        return
+    }
+
+    runXterm = new Terminal(RUN_TERMINAL_CONFIG)
+    runFitAddon = new FitAddon()
+    runXterm.loadAddon(runFitAddon)
+    runXterm.open(runTerminal.value)
+    runFitAddon.fit()
+
+    runXterm.onData(data => {
+        kernelConnection.invoke('PythonInput', runTerminalId, data);
+    })
+}
+
+async function ensureKernelConnected() {
+    if (kernelConnection.state === signalR.HubConnectionState.Disconnected) {
+        await kernelConnection.start();
+    }
+}
+
+function getRunPaths() {
+    const pyEnv = (window as any).process?.env?.PYTHON_PATH;
+    const pythonPath = pyEnv && typeof pyEnv === 'string' && pyEnv.length > 0 ? pyEnv : 'python';
+    const nodePath = (window as any).nodePath;
+    const separator = rootDirectory.value.endsWith('/') ? '' : '/';
+    const fallbackVenv = `${rootDirectory.value}${separator}.venv`;
+    const venvPath = nodePath?.join
+        ? nodePath.join(rootDirectory.value, '.venv')
+        : fallbackVenv;
+    return {pythonPath, venvPath};
+}
+
+function handleRunOutput(targetId: string, output: string) {
+    if (targetId !== runTerminalId || !runXterm) return;
+    if (!showRunTerminal.value) {
+        activeIndexBottom.value = 0;
+    }
+    const formatted = output.replace(/\n/g, '\r\n')
+    runXterm.write(formatted)
+}
+
+function handleRunCompletion(targetId: string) {
+    if (targetId !== runTerminalId || !runXterm) return;
+    runXterm.options.cursorBlink = false;
+    runXterm.options.cursorStyle = 'block';
+}
+
+function openRunTerminal() {
+    activeIndexBottom.value = 0
+    ensureRunTerminal()
+    setTimeout(() => runFitAddon?.fit(), 50)
+}
+
+async function runCodeInTerminal(codeToRun: string, lang?: string, options?: { clear?: boolean }) {
+    await ensureKernelConnected()
+    openRunTerminal()
+    if (options?.clear !== false) {
+        runXterm?.clear()
+    }
+    const {pythonPath, venvPath} = getRunPaths()
+    try {
+        await kernelConnection.invoke(
+            'ExecuteCodeAsync',
+            runTerminalId,
+            codeToRun,
+            pythonPath,
+            venvPath
+        )
+    } catch (err) {
+        console.error('Error invoking code run:', err)
+        runXterm?.writeln(`\r\n[Error] ${err}`)
+    }
+}
+
+provide(RUN_TERMINAL_KEY, {runCode: runCodeInTerminal, open: openRunTerminal})
 
 // ==================== UI HANDLERS ====================
 function handleTopButtonClick(index: number) {
@@ -242,7 +385,9 @@ function handleBottomButtonClick(index: number) {
         activeIndexBottom.value = null
     } else {
         activeIndexBottom.value = index
-        if (index === 1 && fitAddon) {
+        if (index === 0) {
+            openRunTerminal()
+        } else if (index === 1 && fitAddon) {
             setTimeout(() => fitAddon.fit(), 100)
         }
     }
@@ -310,7 +455,7 @@ function startPreviewResize(event: MouseEvent) {
 }
 
 function startTerminalResize(event: MouseEvent) {
-    if (!showTerminal.value) return
+    if (!showTerminalArea.value) return
     resizeState.type = 'terminal'
     resizeState.startY = event.clientY
     resizeState.startSize = layoutState.TerminalHeight
@@ -345,8 +490,15 @@ function stopResize() {
     window.removeEventListener('mousemove', handleResizeDrag)
     window.removeEventListener('mouseup', stopResize)
     document.body.style.userSelect = ''
-    if (resizeState.type === 'terminal' && fitAddon) {
-        setTimeout(() => fitAddon.fit(), 50)
+    if (resizeState.type === 'terminal') {
+        setTimeout(() => {
+            if (showTerminal.value && fitAddon) {
+                fitAddon.fit()
+            }
+            if (showRunTerminal.value && runFitAddon) {
+                runFitAddon.fit()
+            }
+        }, 50)
     }
     resizeState.type = null
     scheduleLayoutSave()
@@ -354,7 +506,7 @@ function stopResize() {
 
 // ==================== FILE EXPLORER ====================
 async function readDirAsync(directoryPath: string, targetArray: FileNode[]): Promise<void> {
-    fileServiceConnection.stream<FileNode>('ReadDirAsync', directoryPath)
+    fileServiceConnection.stream<FileNode>('QuickScanAsync', directoryPath, 1)
         .subscribe({
             next: (fileNode) => {
                 console.log('Received file:', fileNode.name)
@@ -418,6 +570,17 @@ async function loadFileTree() {
 
     } catch (err) {
         console.error('Error loading file tree:', err)
+    }
+}
+
+function startDeepIndexing(rootPath: string) {
+    try {
+        deepIndexSubscription = fileServiceConnection.stream<FileIndexEntry>('DeepIndexAsync', rootPath)
+            .subscribe({
+                error: (err) => console.error('Error during deep indexing', err)
+            })
+    } catch (err) {
+        console.error('Failed to start deep indexing', err)
     }
 }
 
@@ -500,6 +663,10 @@ async function initializeSignalR() {
         await kernelConnection.start();
         await fileServiceConnection.start();
         await ensureLayoutConnection()
+        kernelConnection.off('CodeOutput', handleRunOutput)
+        kernelConnection.off('CodeExecutionCompleted', handleRunCompletion)
+        kernelConnection.on('CodeOutput', handleRunOutput)
+        kernelConnection.on('CodeExecutionCompleted', handleRunCompletion)
         console.log('SignalR connections established')
     } catch (err) {
         console.error('SignalR connection failed:', err)
@@ -518,6 +685,12 @@ watch(showTerminal, (newVal) => {
     }
 })
 
+watch(showRunTerminal, (newVal) => {
+    if (newVal && runFitAddon) {
+        setTimeout(() => runFitAddon.fit(), 100)
+    }
+})
+
 // ==================== LIFECYCLE ====================
 onMounted(async () => {
     initializeTerminal()
@@ -525,6 +698,7 @@ onMounted(async () => {
     await loadLayoutFromKernel()
     await terminalConnection.invoke('TerminalInit');
     await loadFileTree()
+    startDeepIndexing(rootDirectory.value)
     window.addEventListener('resize', handleResize)
 })
 
@@ -534,8 +708,12 @@ onBeforeUnmount(() => {
     if (xterm) {
         xterm.dispose()
     }
+    runXterm?.dispose()
+    deepIndexSubscription?.dispose()
     terminalConnection.stop().catch(err => console.error('Error closing terminal connection:', err))
     layoutConnection.stop().catch(err => console.error('Error closing layout connection:', err))
+    kernelConnection.off('CodeOutput', handleRunOutput)
+    kernelConnection.off('CodeExecutionCompleted', handleRunCompletion)
 })
 </script>
 
@@ -636,9 +814,11 @@ onBeforeUnmount(() => {
                             <div class="editor-main" :style="editorPaneStyle" v-show="showCodePane">
                                 <CodeEditor
                                     v-model:value="code"
-                                    :language="isMarkdownTab ? 'markdown' : 'plaintext'"
+                                    :language="currentLanguage"
                                     :options="EDITOR_OPTIONS"
                                     theme="vs-dark"
+                                    class="code-editor"
+                                    :style="{ width: '100%', height: '100%' }"
                                 />
                             </div>
 
@@ -655,14 +835,15 @@ onBeforeUnmount(() => {
                 </div>
 
                 <!-- Terminal Panel -->
-                <div v-show="showTerminal" class="horizontal-resizer" @mousedown="startTerminalResize"></div>
-                <div v-show="showTerminal" class="terminal-container" :style="terminalStyle">
+                <div v-show="showTerminalArea" class="horizontal-resizer" @mousedown="startTerminalResize"></div>
+                <div v-show="showTerminalArea" class="terminal-container" :style="terminalStyle">
                     <div class="terminal-title-bar">
                         <div class="terminal-title">
-                            <span>Terminal</span>
+                            <span>{{ showRunTerminal ? 'Run Output' : 'Terminal' }}</span>
                         </div>
                     </div>
-                    <div id="terminal" ref="terminal"></div>
+                    <div v-if="showRunTerminal" class="terminal-host" ref="runTerminal"></div>
+                    <div v-else class="terminal-host" ref="terminal"></div>
                 </div>
             </div>
         </div>
