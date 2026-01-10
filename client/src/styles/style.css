@@ -118,7 +118,7 @@ body {
 .view-content {
     display: block;
     width: 240px;
-    min-width: 200px;
+    min-width: 160px;
     flex-shrink: 0;
     border-right: 1px solid var(--widget-border-color);
     background-color: var(--bg-tertiary);
@@ -126,15 +126,27 @@ body {
 }
 
 .vertical-resizer {
-    width: 6px;
+    position: relative;
+    width: 12px;
     cursor: col-resize;
     background-color: transparent;
-    border-right: 1px solid var(--widget-border-color);
     flex-shrink: 0;
 }
 
-.vertical-resizer:hover {
-    background-color: rgba(255, 255, 255, 0.04);
+.vertical-resizer::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 50%;
+    width: 2px;
+    transform: translateX(-50%);
+    background-color: var(--widget-border-color);
+    border-radius: 2px;
+}
+
+.vertical-resizer:hover::after {
+    background-color: rgba(255, 255, 255, 0.2);
 }
 
 .tool-bar {
@@ -402,6 +414,7 @@ body {
     color: var(--text-secondary);
     transition: background-color var(--transition-fast), color var(--transition-fast), border-color var(--transition-fast);
     padding: 0;
+    background-color: var(--bg-secondary);
 }
 
 .tab-view-btn:hover {
@@ -414,6 +427,15 @@ body {
     color: var(--text-primary);
     border-color: var(--accent-color);
     background-color: var(--accent-color-muted);
+}
+
+.tab-view-btn .material-symbols-outlined {
+    font-variation-settings: 'FILL' 0, 'wght' 500, 'GRAD' 0, 'opsz' 20;
+}
+
+.tab-view-btn.active .material-symbols-outlined {
+    color: var(--accent-color);
+    font-variation-settings: 'FILL' 1, 'wght' 600, 'GRAD' 0, 'opsz' 20;
 }
 
 /* ===========================================
@@ -484,6 +506,18 @@ button.primary:hover {
     display: flex;
     flex: 1 1 auto;
     min-width: 0;
+    overflow: hidden;
+}
+
+.code-editor {
+    width: 100%;
+    height: 100%;
+    min-width: 0;
+}
+
+.editor-main .monaco-editor,
+.editor-main .monaco-editor .overflow-guard {
+    max-width: 100%;
 }
 
 /* ===========================================
@@ -499,15 +533,26 @@ button.primary:hover {
 }
 
 .split-resizer {
-    width: 6px;
+    position: relative;
+    width: 12px;
     cursor: col-resize;
     background-color: transparent;
-    border-left: 1px solid var(--widget-border-color);
-    border-right: 1px solid var(--widget-border-color);
 }
 
-.split-resizer:hover {
-    background-color: rgba(255, 255, 255, 0.04);
+.split-resizer::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 50%;
+    width: 2px;
+    transform: translateX(-50%);
+    background-color: var(--widget-border-color);
+    border-radius: 2px;
+}
+
+.split-resizer:hover::after {
+    background-color: rgba(255, 255, 255, 0.2);
 }
 
 .markdown-body {
@@ -532,16 +577,26 @@ button.primary:hover {
 }
 
 .horizontal-resizer {
-    height: 6px;
+    position: relative;
+    height: 12px;
     cursor: row-resize;
     background-color: transparent;
-    border-top: 1px solid var(--widget-border-color);
-    border-bottom: 1px solid var(--widget-border-color);
     flex-shrink: 0;
 }
 
-.horizontal-resizer:hover {
-    background-color: rgba(255, 255, 255, 0.04);
+.horizontal-resizer::after {
+    content: '';
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 50%;
+    height: 2px;
+    transform: translateY(-50%);
+    background-color: var(--widget-border-color);
+}
+
+.horizontal-resizer:hover::after {
+    background-color: rgba(255, 255, 255, 0.2);
 }
 
 .terminal-title-bar {
@@ -583,13 +638,13 @@ button.primary:hover {
     box-shadow: none;
 }
 
-#terminal {
+.terminal-host {
     flex: 1;
     overflow: hidden;
     background-color: var(--bg-tertiary);
 }
 
-.terminal.xterm {
+.terminal-host .xterm {
     padding: 12px 16px;
     height: 100%;
 }
