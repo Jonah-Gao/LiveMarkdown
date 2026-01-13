@@ -37,6 +37,7 @@ builder.Services.AddCors(options =>
 builder.Services.AddSingleton<TerminalService>();
 builder.Services.AddSingleton<PythonVenvRunner>();
 builder.Services.AddSingleton<FileService>();
+builder.Services.AddSingleton<LayoutService>();
 builder.Services.AddSignalR();
 
 var app = builder.Build();
@@ -57,6 +58,8 @@ app.MapHub<TerminalHub>("/terminalHub");
 app.Logger.LogInformation("Mapped hub: {Path} -> {Hub}", LogFormatter.ToMagenta("/terminalHub"), LogFormatter.ToCyan("TerminalHub"));
 app.MapHub<FileHub>("/fileHub");
 app.Logger.LogInformation("Mapped hub: {Path} -> {Hub}", LogFormatter.ToMagenta("/fileHub"), LogFormatter.ToCyan("FileHub"));
+app.MapHub<LayoutHub>("/layoutHub");
+app.Logger.LogInformation("Mapped hub: {Path} -> {Hub}", LogFormatter.ToMagenta("/layoutHub"), LogFormatter.ToCyan("LayoutHub"));
 
 // Final run with a top-level try to ensure we log unhandled shutdowns
 try

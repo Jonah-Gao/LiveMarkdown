@@ -1,6 +1,6 @@
 ﻿/**
- * Enum representing the different types of tokens supported by the markdown parser.
- * Using const enum for performance optimization (inlined at compile time).
+ * Enum representing the different types of tokens supported by the Markdown parser.
+ * Using const enum for performance optimisation (inlined at compile time).
  */
 const enum TokenType {
     BODY = 'body',
@@ -25,7 +25,7 @@ const enum TokenType {
     NEWLINE = 'newline',
     SOFTBREAK = 'softbreak',
     HARDBREAK = 'hardbreak',
-    PARAGRAPHBREAK = 'paragraphbreak',
+    HTML = 'html',
 }
 
 /**
@@ -34,7 +34,7 @@ const enum TokenType {
  */
 interface BaseToken<T extends TokenType = TokenType> {
     readonly type: T;
-    raw: string;        // The raw markdown string for this token
+    raw: string;        // The raw Markdown string for this token
     text?: string;      // The text content of the token (if applicable)
     tokens?: Token[];   // Nested tokens (for block tokens that contain inline tokens)
 }
@@ -116,11 +116,15 @@ type SimpleTokenType =
     | TokenType.BLOCKQUOTE
     | TokenType.PARAGRAPH
     | TokenType.BODY
-    | TokenType.PARAGRAPHBREAK
-    | TokenType.NEWLINE;
+    | TokenType.NEWLINE
+    | TokenType.HTML;
 
 interface SimpleToken extends BaseToken<SimpleTokenType> {
     readonly type: SimpleTokenType;
+}
+
+interface HtmlToken extends BaseToken<TokenType.HTML> {
+    readonly block?: boolean;
 }
 
 // Union type
@@ -135,31 +139,10 @@ type Token =
     | OListToken
     | ListItemToken
     | TextToken
-    | SimpleToken;
+    | SimpleToken
+    | HtmlToken;
 
-// Type guard utility function
-const isTokenType = <T extends Token>(
-    token: Token,
-    type: T['type']
-): token is T => token.type === type;
-
-// Common type guards
-const isHeading = (token: Token): token is HeadingToken =>
-    token.type === TokenType.HEADING;
-
-const isCodeBlock = (token: Token): token is CodeBlockToken =>
-    token.type === TokenType.CODE_BLOCK;
-
-const isLink = (token: Token): token is LinkToken =>
-    token.type === TokenType.LINK;
-
-const isUList = (token: Token): token is UListToken =>
-    token.type === TokenType.ULIST;
-
-const isOList = (token: Token): token is OListToken =>
-    token.type === TokenType.OLIST;
-
-export {TokenType, isTokenType, isHeading, isCodeBlock, isLink, isUList, isOList};
+export {TokenType};
 export type {
     Token,
     BaseToken,
@@ -172,5 +155,6 @@ export type {
     OListToken,
     ListItemToken,
     TextToken,
-    SimpleToken
+    SimpleToken,
+    HtmlToken
 };

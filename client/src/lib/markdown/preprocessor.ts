@@ -1,19 +1,26 @@
 ﻿/**
- * The Preprocessor class is responsible for normalizing the input markdown string before tokenization.
- * This ensures consistent behavior across different operating systems and environments.
+ * The Preprocessor class is responsible for normalising the input Markdown string before tokenization.
+ * This ensures consistent behaviour across different operating systems and environments.
  */
 class Preprocessor {
     private newlinesPattern = /\r\n|\r|\n/g;
 
     /**
      * Preprocesses the input string.
-     * Currently, it normalizes all line endings to `\n`.
-     * @param input The raw markdown string.
-     * @returns The normalized string.
+     * Normalises line endings to `\n` and trims empty lines from start and end.
+     * @param input The raw Markdown string.
+     * @returns The normalised string.
      */
     preprocess(input: string): string {
         // Normalize newlines to \n
-        return input.replace(this.newlinesPattern, '\n');
+        let normalized = input.replace(this.newlinesPattern, '\n');
+
+        // Remove leading and trailing empty lines and replace null characters with U+FFFD
+        normalized = normalized.replace(/^\n+/, '')
+            .replace(/\n+$/, '')
+            .replace(/\x00/g, "\uFFFD");
+
+        return normalized;
     }
 }
 

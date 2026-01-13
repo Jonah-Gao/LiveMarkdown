@@ -1,4 +1,27 @@
 ﻿import {Token, TokenType} from './types.ts';
+import DOMPurify from 'dompurify';
+
+/**
+ * Delimiter for emphasis parsing
+ */
+interface Delimiter {
+    type: '*' | '_';
+    count: number;
+    origCount: number;
+    pos: number;
+    canOpen: boolean;
+    canClose: boolean;
+    active: boolean;
+}
+
+/**
+ * Match between opener and closer delimiters
+ */
+interface DelimiterMatch {
+    openerIdx: number;
+    closerIdx: number;
+    count: number;
+}
 
 /**
  * The Lexer class is responsible for converting the raw Markdown string into a stream of tokens.
@@ -21,31 +44,27 @@ class Lexer {
         [TokenType.CODE_BLOCK, /^( {0,3})(`{3,}) *([^\s`]+)?(?:\n|$)/],
         [TokenType.HEADING, /^(#{1,6})\s/],
         [TokenType.HR, /^ {0,3}((_ *){3,}|(- *){3,}|(\* *){3,})(?:\n|$)/],
-        // [TokenType.PARAGRAPHBREAK, /^(\n{2,})/],
+        [TokenType.HTML, /^ {0,3}<[A-Za-z!/?][^\n]*\n?/],
     ];
 
     /**
      * Rules for inline elements (bold, italic, links, etc.).
      * Order matters: more specific patterns should come first.
+     * Note: Emphasis (* and _) is handled separately via delimiter-based parsing
      */
     private inlineRules: Array<[TokenType, RegExp]> = [
         // Escape sequences (must be first to handle escaped characters)
         [TokenType.ESCAPE, /\\([\\`*_{}\[\]()#+\-.!|~])/],
-        [TokenType.HARDBREAK, / {2,}\n/],
+        [TokenType.HARDBREAK, /(?: {2,}|\\)\n/],
         [TokenType.SOFTBREAK, /\n/],
         // Code (highest priority to avoid conflicts)
         [TokenType.CODE_INLINE, /`([^`\n]+)`/],
-        [TokenType.BOLD_ITALIC, /\*\*\*([^*\n]+?)\*\*\*/],
-        [TokenType.BOLD_ITALIC, /___([^_\n]+?)___/],
-        [TokenType.BOLD, /\*\*([^*\n]+?)\*\*/],
-        [TokenType.BOLD, /__([^_\n]+?)__/],
-        [TokenType.ITALIC, /\*([^*\n]+?)\*/],
-        [TokenType.ITALIC, /_([^_\n]+?)_/],
         // Images (must come before links due to leading !)
         [TokenType.IMAGE, /!\[([^\]]*)]\(([^)\s]+)(?:\s+"([^"]+)")?\)/],
         [TokenType.LINK, /\[([^\]]+)]\(([^)\s]+)(?:\s+"([^"]+)")?\)/],
         [TokenType.AUTOLINK, /<(https?:\/\/[a-zA-Z0-9][\w.-]*(?::[0-9]+)?(?:\/[^\s>]*)?)>/],
         [TokenType.AUTOLINK, /<([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})>/],
+        [TokenType.HTML, /<([A-Za-z][\w:-]*)(?:\s[^>]*)?>([\s\S]*?)<\/\1\s*>|<(?:!--[\s\S]*?--|\/?[A-Za-z][^>]*?>)/],
     ];
 
 
@@ -71,7 +90,7 @@ class Lexer {
                 const match: RegExpMatchArray | null = input.match(regex);
                 if (match) {
                     input = input.slice(match[0].length);
-                    const [token, length] = this.createToken(type, match, input);
+                    const [token, length] = this.createToken(type, match, input, {htmlBlock: type === TokenType.HTML});
                     tokens.push(token);
                     input = input.slice(length);
                     matched = true;
@@ -79,7 +98,7 @@ class Lexer {
                 }
             }
             if (!matched) {
-                let [token, length] = this.createToken(TokenType.PARAGRAPH, null, input);
+                const [token, length] = this.createToken(TokenType.PARAGRAPH, null, input);
                 tokens.push(token);
                 input = input.slice(length);
             }
@@ -97,14 +116,14 @@ class Lexer {
                 const match: RegExpMatchArray | null = input.match(regex);
                 if (match) {
                     input = input.slice(match[0].length);
-                    let [token, length] = this.createToken(type, match, input);
+                    const [token, length] = this.createToken(type, match, input, {htmlBlock: type === TokenType.HTML});
                     tokens.push(token);
                     input = input.slice(length);
                     totalLength += match[0].length + length;
                     break;
                 }
             }
-            let [token, length] = this.createToken(TokenType.PARAGRAPH, null, input);
+            const [token, length] = this.createToken(TokenType.PARAGRAPH, null, input);
             tokens.push(token);
             input = input.slice(length);
             totalLength += length;
@@ -175,6 +194,25 @@ class Lexer {
         return [line.trim(), end];
     }
 
+    private parseHtmlBlock(input: string, firstLine: string): [result: string, length: number] {
+        const lines: string[] = [firstLine];
+        let idx = 0;
+
+        while (idx < input.length) {
+            const lineEnd: number = input.indexOf('\n', idx);
+            const end: number = lineEnd === -1 ? input.length : lineEnd + 1;
+            const line: string = input.slice(idx, end);
+
+            if (this.isEmptyLine(line)) {
+                break;
+            }
+
+            lines.push(line);
+            idx = end;
+        }
+
+        return [lines.join(''), idx];
+    }
 
     private parseParagraph(input: string): [result: string, length: number] {
         let lines: string[] = [];
@@ -259,6 +297,285 @@ class Lexer {
     }
 
     /**
+     * Check if a character is Unicode whitespace
+     */
+    private isUnicodeWhitespace(char: string | undefined): boolean {
+        if (!char) return true; // Beginning/end of line counts as whitespace
+        return /\s/.test(char);
+    }
+
+    /**
+     * Check if a character is Unicode punctuation
+     * This includes ASCII punctuation and Unicode punctuation categories
+     */
+    private isUnicodePunctuation(char: string | undefined): boolean {
+        if (!char) return false;
+        // ASCII punctuation
+        if (/[!"#$%&'()*+,\-./:;<=>?@\[\\\]^_`{|}~]/.test(char)) return true;
+        // Unicode punctuation categories: Pc, Pd, Pe, Pf, Pi, Po, Ps
+        return /\p{P}/u.test(char);
+    }
+
+    /**
+     * Check if a delimiter run is left-flanking
+     */
+    private isLeftFlanking(text: string, startIdx: number, length: number, _delimChar: string): boolean {
+        const after = text[startIdx + length];
+        const before = text[startIdx - 1];
+
+        // (1) not followed by Unicode whitespace
+        if (this.isUnicodeWhitespace(after)) return false;
+
+        // (2a) not followed by a Unicode punctuation character
+        if (!this.isUnicodePunctuation(after)) return true;
+
+        // (2b) followed by a Unicode punctuation character and
+        // preceded by Unicode whitespace or a Unicode punctuation character
+        return this.isUnicodeWhitespace(before) || this.isUnicodePunctuation(before);
+    }
+
+    /**
+     * Check if a delimiter run is right-flanking
+     */
+    private isRightFlanking(text: string, startIdx: number, length: number, _delimChar: string): boolean {
+        const before = text[startIdx - 1];
+        const after = text[startIdx + length];
+
+        // (1) not preceded by Unicode whitespace
+        if (this.isUnicodeWhitespace(before)) return false;
+
+        // (2a) not preceded by a Unicode punctuation character
+        if (!this.isUnicodePunctuation(before)) return true;
+
+        // (2b) preceded by a Unicode punctuation character and
+        // followed by Unicode whitespace or a Unicode punctuation character
+        return this.isUnicodeWhitespace(after) || this.isUnicodePunctuation(after);
+    }
+
+    /**
+     * Parse emphasis and strong emphasis using delimiter-based parsing
+     * according to CommonMark specification
+     */
+    private parseEmphasis(text: string): Token[] {
+        if (!text) return [];
+
+        // First pass: identify all potential delimiter runs
+        const delimiters: Delimiter[] = [];
+        let i = 0;
+
+        while (i < text.length) {
+            const char = text[i];
+            if (char === '*' || char === '_') {
+                const startPos = i;
+                let count = 0;
+
+                while (i < text.length && text[i] === char) {
+                    count++;
+                    i++;
+                }
+
+                const leftFlanking = this.isLeftFlanking(text, startPos, count, char);
+                const rightFlanking = this.isRightFlanking(text, startPos, count, char);
+
+                let canOpen = false;
+                let canClose = false;
+
+                if (char === '*') {
+                    canOpen = leftFlanking;
+                    canClose = rightFlanking;
+                } else { // '_'
+                    canOpen = leftFlanking && (!rightFlanking || this.isUnicodePunctuation(text[startPos - 1]));
+                    canClose = rightFlanking && (!leftFlanking || this.isUnicodePunctuation(text[startPos + count]));
+                }
+
+                delimiters.push({
+                    type: char,
+                    count: count,
+                    origCount: count,
+                    pos: startPos,
+                    canOpen: canOpen,
+                    canClose: canClose,
+                    active: true
+                });
+            } else {
+                i++;
+            }
+        }
+
+        // Second pass: match openers with closers
+        const matches: DelimiterMatch[] = [];
+
+        for (let closerIdx = 0; closerIdx < delimiters.length; closerIdx++) {
+            const closer = delimiters[closerIdx];
+            if (!closer.canClose || !closer.active) continue;
+
+            // Look backwards for a matching opener
+            let searchIdx = closerIdx - 1;
+            while (closer.count > 0 && closer.active) {
+                let matched = false;
+
+                // Look backwards for a matching opener
+                for (let openerIdx = searchIdx; openerIdx >= 0; openerIdx--) {
+                    const opener = delimiters[openerIdx];
+                    if (!opener.canOpen || !opener.active || opener.type !== closer.type) continue;
+
+                    // Check the "multiple of 3" rule
+                    const canOpenAndClose = opener.canOpen && opener.canClose;
+                    const closerCanOpenAndClose = closer.canOpen && closer.canClose;
+
+                    if (canOpenAndClose || closerCanOpenAndClose) {
+                        const totalLength = opener.count + closer.count;
+                        if (totalLength % 3 === 0 && opener.count % 3 !== 0 && closer.count % 3 !== 0) {
+                            continue;
+                        }
+                    }
+                    // Prefer strong emphasis (use 2) over regular (use 1)
+                    const useCount: number = Math.min(
+                        (opener.count >= 2 && closer.count >= 2) ? 2 : 1,
+                        opener.count,
+                        closer.count
+                    );
+
+                    matches.push({openerIdx, closerIdx, count: useCount});
+
+                    opener.count -= useCount;
+                    closer.count -= useCount;
+
+                    if (opener.count === 0) opener.active = false;
+                    if (closer.count === 0) closer.active = false;
+
+                    matched = true;
+                    searchIdx = openerIdx - 1;
+                    break;
+                }
+
+                if (!matched) {
+                    break;
+                }
+            }
+        }
+
+        // Third pass: build tokens from text and matches
+        if (matches.length === 0) {
+            // No emphasis found, return as plain text
+            return text ? [{
+                type: TokenType.TEXT,
+                raw: text,
+                text: text
+            }] : [];
+        }
+
+        const openerUsage: Record<number, number> = {};
+        const closerUsage: Record<number, number> = {};
+
+        // First, assign concrete positions for each match so that
+        // opener characters are taken from the right side of the run
+        // and closer characters from the left side.
+        const matchesWithPositions = matches
+            .slice()
+            .sort((a, b) => {
+                const aClose = delimiters[a.closerIdx].pos;
+                const bClose = delimiters[b.closerIdx].pos;
+                if (aClose !== bClose) return aClose - bClose;
+                const aOpen = delimiters[a.openerIdx].pos;
+                const bOpen = delimiters[b.openerIdx].pos;
+                return bOpen - aOpen;
+            })
+            .map(match => {
+                const opener = delimiters[match.openerIdx];
+                const closer = delimiters[match.closerIdx];
+
+                const openerUsed = openerUsage[match.openerIdx] || 0;
+                const closerUsed = closerUsage[match.closerIdx] || 0;
+
+                // Use delimiter characters closest to the content for openers (from the right)
+                // so nested matches sharing a delimiter run allocate the inner pairs first.
+                const openerStart = opener.pos + (opener.origCount - openerUsed - match.count);
+                const openerEnd = openerStart + match.count;
+                const closerStart = closer.pos + closerUsed;
+                const closerEnd = closerStart + match.count;
+
+                openerUsage[match.openerIdx] = openerUsed + match.count;
+                closerUsage[match.closerIdx] = closerUsed + match.count;
+
+                return {...match, openerStart, openerEnd, closerStart, closerEnd};
+            });
+
+        // Sort matches by opener position for token construction
+        matchesWithPositions.sort((a, b) => {
+            if (a.openerStart !== b.openerStart) return a.openerStart - b.openerStart;
+            return a.closerStart - b.closerStart;
+        });
+
+        const result: Token[] = [];
+        let currentPos = 0;
+
+        for (const match of matchesWithPositions) {
+            const opener = delimiters[match.openerIdx];
+            const closer = delimiters[match.closerIdx];
+
+            // Calculate actual positions
+            const openerStart = match.openerStart;
+            const openerEnd = match.openerEnd;  // Position after matched delimiters
+            const closerStart = match.closerStart;
+            const closerEnd = match.closerEnd;  // Position after matched delimiters
+
+            // Skip if this match would end at or before the text already emitted
+            if (closerEnd <= currentPos) {
+                continue;
+            }
+
+            // Add text before this emphasis
+            if (currentPos < openerStart) {
+                const beforeText = text.substring(currentPos, openerStart);
+                result.push(...this.parseEmphasis(beforeText));
+            }
+
+            // Add unmatched opener delimiters as text
+            if (opener.count > 0) {
+                result.push({
+                    type: TokenType.TEXT,
+                    raw: opener.type.repeat(opener.count),
+                    text: opener.type.repeat(opener.count)
+                });
+            }
+
+            // Extract content between opener and closer
+            const content = text.substring(openerEnd, closerStart);
+            const emphType = match.count === 2 ? TokenType.BOLD : TokenType.ITALIC;
+
+            // Recursively parse the content for nested emphasis
+            const innerTokens = content ? this.parseEmphasis(content) : [];
+
+            result.push({
+                type: emphType,
+                raw: opener.type.repeat(match.count) + content + closer.type.repeat(match.count),
+                text: content,
+                tokens: innerTokens
+            });
+
+            // Add unmatched closer delimiters as text
+            if (closer.count > 0) {
+                result.push({
+                    type: TokenType.TEXT,
+                    raw: closer.type.repeat(closer.count),
+                    text: closer.type.repeat(closer.count)
+                });
+            }
+
+            currentPos = closerEnd;
+        }
+
+        // Add remaining text after all matches
+        if (currentPos < text.length) {
+            const remainingText = text.substring(currentPos);
+            result.push(...this.parseEmphasis(remainingText));
+        }
+
+        return result;
+    }
+
+    /**
      * Parses inline content within a block.
      * @param raw The raw string containing inline elements.
      * @returns An array of inline tokens.
@@ -266,43 +583,37 @@ class Lexer {
     private parseInline(raw: string): Token[] {
         const tokens: Token[] = [];
         let remaining: string = raw;
-        let plainTextBuffer: string[] = [];
 
         while (remaining.length > 0) {
-            let matched: boolean = false;
+            let bestMatch: RegExpMatchArray | null = null;
+            let bestType: TokenType | null = null;
+            let bestIndex: number = Number.MAX_SAFE_INTEGER;
 
+            // Try to match non-emphasis inline rules first
             for (const [type, regex] of this.inlineRules) {
-                const match: RegExpMatchArray | null = remaining.match(regex);
-                if (match && match.index === 0) {
-                    // Flush plain text buffer before adding new token
-                    if (plainTextBuffer.length > 0) {
-                        tokens.push({
-                            type: TokenType.TEXT,
-                            raw: plainTextBuffer.join(''),
-                            text: plainTextBuffer.join(''),
-                        });
-                        plainTextBuffer = [];
-                    }
-                    tokens.push(this.createToken(type, match)[0]);
-                    remaining = remaining.slice(match[0].length);
-                    matched = true;
-                    break;
+                regex.lastIndex = 0;
+                const match = regex.exec(remaining);
+                if (match && match.index < bestIndex) {
+                    bestMatch = match;
+                    bestType = type;
+                    bestIndex = match.index;
                 }
             }
 
-            if (!matched) {
-                plainTextBuffer.push(remaining.charAt(0));
-                remaining = remaining.slice(1);
+            if (!bestMatch || bestType === null) {
+                tokens.push(...this.parseEmphasis(remaining));
+                break;
             }
+
+            if (bestIndex > 0) {
+                const prefix = remaining.slice(0, bestIndex);
+                tokens.push(...this.parseEmphasis(prefix));
+            }
+
+            tokens.push(this.createToken(bestType, bestMatch)[0]);
+            remaining = remaining.slice(bestIndex + bestMatch[0].length);
         }
-        // Flush any remaining plain text
-        if (plainTextBuffer.length > 0) {
-            tokens.push({
-                type: TokenType.TEXT,
-                raw: plainTextBuffer.join(''),
-                text: plainTextBuffer.join(''),
-            });
-        }
+
         return tokens;
     }
 
@@ -326,7 +637,7 @@ class Lexer {
         let blankLineCount: number = 0;
         let firstItemMarkerWidth: number = initialMarkerWidth;
 
-        // Handle first line (marker already stripped by tokenizer)
+        // Handle first line (marker already stripped by tokeniser)
         const firstLineEnd: number = input.indexOf('\n', 0);
         const firstLineIdx: number = firstLineEnd === -1 ? input.length : firstLineEnd + 1;
         const line: string = input.slice(0, firstLineIdx);
@@ -448,7 +759,7 @@ class Lexer {
         let start: number | undefined = parseInt(initialMarker, 10);
         let firstItemMarkerWidth: number = initialMarkerWidth;
 
-        // Handle first line (marker already stripped by tokenizer)
+        // Handle first line (marker already stripped by tokeniser)
         const firstLineEnd: number = input.indexOf('\n', 0);
         const firstLineIdx: number = firstLineEnd === -1 ? input.length : firstLineEnd + 1;
         currentItemLines.push(input.slice(0, firstLineIdx));
@@ -561,9 +872,12 @@ class Lexer {
      * @param type The type of token to create.
      * @param match The regex match result.
      * @param input The raw Markdown string.
+     * @param options
      * @returns The created Token.
      */
-    private createToken(type: TokenType, match: RegExpMatchArray | null, input: string = ''): [token: Token, length: number] {
+    private createToken(type: TokenType, match: RegExpMatchArray | null, input: string = '', options: {
+        htmlBlock?: boolean
+    } = {}): [token: Token, length: number] {
         const raw: string = match ? match[0] : '';
         let marker: string;
         let indent: number;
@@ -642,6 +956,18 @@ class Lexer {
                     text: result,
                     tokens: this.parseInline(result),
                 }, length];
+            case TokenType.HTML: {
+                const firstLine: string = raw;
+                const isBlock: boolean = options.htmlBlock === true;
+                const [htmlContent, consumed] = isBlock ? this.parseHtmlBlock(input, firstLine) : [firstLine, 0];
+                const sanitized: string = DOMPurify.sanitize(htmlContent);
+                return [{
+                    type,
+                    raw: htmlContent,
+                    text: sanitized,
+                    block: isBlock
+                }, consumed];
+            }
             case TokenType.BLOCKQUOTE:
                 [result, length] = this.parseBlockquote(input)
                 return [{
@@ -670,7 +996,6 @@ class Lexer {
             case TokenType.NEWLINE:
             case TokenType.SOFTBREAK:
             case TokenType.HARDBREAK:
-            case TokenType.PARAGRAPHBREAK:
             case TokenType.HR:
                 return [{
                     type,
@@ -688,6 +1013,7 @@ class Lexer {
     private isEmptyLine(line: string): boolean {
         return /^\s*\n?$/.test(line);
     }
+
 }
 
 const lexer = new Lexer();
