@@ -18,6 +18,7 @@ const MIN_TERMINAL_HEIGHT = 150
 const MAX_TERMINAL_HEIGHT = 900
 const MIN_PREVIEW_RATIO = 0.15
 const MAX_PREVIEW_RATIO = 0.85
+const LAYOUT_SAVE_DEBOUNCE_MS = 300
 
 const LANGUAGE_BY_EXTENSION: Record<string, string> = {
     '.ts': 'typescript',
@@ -99,7 +100,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
         containerWidth: 0
     })
     const deepIndexSubscription = ref<signalR.ISubscription<FileIndexEntry> | null>(null)
-    const saveLayoutTimer = ref<number | null>(null)
+    const saveLayoutTimer = ref<ReturnType<typeof setTimeout> | null>(null)
 
     const runTerminalApi = ref<{ runCode: (code: string, lang?: string, options?: { clear?: boolean }) => Promise<void>, open: () => void } | null>(null)
 
@@ -424,7 +425,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
         }
         saveLayoutTimer.value = window.setTimeout(() => {
             void saveLayout()
-        }, 300)
+        }, LAYOUT_SAVE_DEBOUNCE_MS)
     }
 
     async function saveLayout() {
