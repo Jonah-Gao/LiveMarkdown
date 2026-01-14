@@ -9,6 +9,7 @@ import * as signalR from '@microsoft/signalr'
 const md = new MarkdownParser()
 
 const DEFAULT_UNTITLED_NAME = 'Untitled.md'
+const DEFAULT_ROOT_DIRECTORY = (window as any).process?.env?.ROOT_DIRECTORY || 'E:\\CS_NEA_Project\\test'
 const MIN_EXPLORER_WIDTH = 160
 const MAX_EXPLORER_WIDTH = 520
 const MIN_TERMINAL_HEIGHT = 150
@@ -87,7 +88,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     })
 
     const fileTree = ref<FileNode[]>([])
-    const rootDirectory = ref('E:\\CS_NEA_Project\\test')
+    const rootDirectory = ref(DEFAULT_ROOT_DIRECTORY)
     const resizeState = reactive({
         type: null as 'explorer' | 'preview' | 'terminal' | null,
         startX: 0,
@@ -317,9 +318,11 @@ export const useWorkspaceStore = defineStore('workspace', () => {
                     } else {
                         const tab = tabs.value.find(t => t.id === chunk.id)
                         if (tab) {
-                            tab.content += chunk.content
+                            tab.content += chunk.content;
+                            openTab(tab);
+                        } else {
+                            console.error('Received chunk for unknown tab id:', chunk.id)
                         }
-                        openTab(tab!);
                     }
                 },
                 complete: () => {
@@ -441,6 +444,10 @@ export const useWorkspaceStore = defineStore('workspace', () => {
         runTerminalApi.value = api
     }
 
+    function activateRunTerminal() {
+        activeIndexBottom.value = 0
+    }
+
     function teardown() {
         void saveLayout()
         deepIndexSubscription.value?.dispose()
@@ -504,5 +511,6 @@ export const useWorkspaceStore = defineStore('workspace', () => {
         teardown,
         applyViewModeForActiveTab,
         saveActiveTab,
+        activateRunTerminal,
     }
 })

@@ -107,7 +107,7 @@ function getRunPaths() {
 function handleRunOutput(targetId: string, output: string) {
     if (targetId !== runTerminalId || !runXterm) return;
     if (!showRunTerminal.value) {
-        workspace.activeIndexBottom = 0;
+        workspace.activateRunTerminal();
     }
     const formatted = output.replace(/\n/g, '\r\n')
     runXterm.write(formatted)
@@ -120,7 +120,7 @@ function handleRunCompletion(targetId: string) {
 }
 
 function openRunTerminal() {
-    workspace.activeIndexBottom = 0
+    workspace.activateRunTerminal()
     ensureRunTerminal()
     setTimeout(() => runFitAddon?.fit(), 50)
 }
