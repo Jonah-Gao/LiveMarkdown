@@ -9,7 +9,9 @@ import * as signalR from '@microsoft/signalr'
 const md = new MarkdownParser()
 
 const DEFAULT_UNTITLED_NAME = 'Untitled.md'
-const DEFAULT_ROOT_DIRECTORY = (window as any).process?.env?.ROOT_DIRECTORY || 'E:\\CS_NEA_Project\\test'
+const envRootDirectory = (window as any).process?.env?.ROOT_DIRECTORY
+const userHomeDirectory = (window as any).process?.env?.HOME || (window as any).process?.env?.USERPROFILE
+const DEFAULT_ROOT_DIRECTORY = envRootDirectory || userHomeDirectory || '.'
 const MIN_EXPLORER_WIDTH = 160
 const MAX_EXPLORER_WIDTH = 520
 const MIN_TERMINAL_HEIGHT = 150
@@ -314,14 +316,14 @@ export const useWorkspaceStore = defineStore('workspace', () => {
                         tabs.value.push(tab);
                         openTab(tab);
                     } else if (chunk.isError) {
-                        console.error('Error loading tab:', chunk.content)
+                        console.error('Error loading tab:', chunk.content);
                     } else {
                         const tab = tabs.value.find(t => t.id === chunk.id)
                         if (tab) {
                             tab.content += chunk.content;
                             openTab(tab);
                         } else {
-                            console.error('Received chunk for unknown tab id:', chunk.id)
+                            console.error('Received chunk for unknown tab id:', chunk.id);
                         }
                     }
                 },
