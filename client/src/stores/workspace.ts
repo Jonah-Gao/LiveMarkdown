@@ -11,7 +11,7 @@ const md = new MarkdownParser()
 const DEFAULT_UNTITLED_NAME = 'Untitled.md'
 const envRootDirectory = (window as any).process?.env?.ROOT_DIRECTORY
 const userHomeDirectory = (window as any).process?.env?.HOME || (window as any).process?.env?.USERPROFILE
-const DEFAULT_ROOT_DIRECTORY = envRootDirectory || userHomeDirectory || '.'
+const DEFAULT_ROOT_DIRECTORY = envRootDirectory || userHomeDirectory || '/'
 const MIN_EXPLORER_WIDTH = 160
 const MAX_EXPLORER_WIDTH = 520
 const MIN_TERMINAL_HEIGHT = 150
@@ -313,17 +313,17 @@ export const useWorkspaceStore = defineStore('workspace', () => {
                             content: '',
                             isDirty: false,
                         }
-                        tabs.value.push(tab);
-                        openTab(tab);
+                        tabs.value.push(tab)
+                        openTab(tab)
                     } else if (chunk.isError) {
-                        console.error('Error loading tab:', chunk.content);
+                        console.error('Error loading tab:', chunk.content)
                     } else {
                         const tab = tabs.value.find(t => t.id === chunk.id)
                         if (tab) {
-                            tab.content += chunk.content;
-                            openTab(tab);
+                            tab.content += chunk.content
+                            openTab(tab)
                         } else {
-                            console.error('Received chunk for unknown tab id:', chunk.id);
+                            console.error('Received chunk for unknown tab id:', chunk.id)
                         }
                     }
                 },
@@ -337,9 +337,10 @@ export const useWorkspaceStore = defineStore('workspace', () => {
 
     async function loadFileTree() {
         try {
+            const nodePath = (window as any).nodePath
             fileTree.value = [{
-                name: (window as any).nodePath?.basename
-                    ? (window as any).nodePath.basename(rootDirectory.value)
+                name: nodePath?.basename
+                    ? nodePath.basename(rootDirectory.value)
                     : rootDirectory.value,
                 path: rootDirectory.value,
                 extension: '',
