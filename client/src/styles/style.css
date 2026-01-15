@@ -368,6 +368,7 @@ body {
     width: 20px;
     margin-left: 4px;
     justify-content: center;
+    text-align: center;
     align-items: center;
     cursor: pointer;
     user-select: none;

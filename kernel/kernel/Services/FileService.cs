@@ -24,7 +24,7 @@ public class FileService(ILogger<FileService> logger)
         [UsedImplicitly] public string Path { get; set; } = string.Empty;
         [UsedImplicitly] public string Extension { get; set; } = string.Empty;
         [UsedImplicitly] public bool IsDirectory { get; set; }
-        [UsedImplicitly] public IAsyncEnumerable<FileNode>? Children { get; set; }
+        [UsedImplicitly] public string ParentPath { get; set; } = string.Empty;
         [UsedImplicitly] public bool? Expanded { get; set; }
     }
 
@@ -123,54 +123,76 @@ public class FileService(ILogger<FileService> logger)
     public async IAsyncEnumerable<FileNode> ReadDirAsync(string dirPath,
         [EnumeratorCancellation] CancellationToken token = default)
     {
-        var count = 0;
-        IEnumerable<FileSystemInfo> entries;
-        try
-        {
-            entries = new DirectoryInfo(dirPath).EnumerateFileSystemInfos();
-        }
-        catch (UnauthorizedAccessException ex)
-        {
-            logger.LogWarning("Access denied to {Path}: {Msg}", dirPath, ex.Message);
-            yield break; // 如果根目录都打不开，直接退出
-        }
+        var queue = new Queue<string>();
+        queue.Enqueue(dirPath);
 
-        foreach (var entry in entries)
+        var count = 0;
+
+        while (queue.Count > 0)
         {
             token.ThrowIfCancellationRequested();
-            if (++count % 100 == 0)
-            {
-                await Task.Yield();
-            }
 
-            FileNode node;
+            var currentDir = queue.Dequeue();
+            
+            IEnumerable<FileSystemInfo> entries;
             try
             {
-                node = new FileNode
-                {
-                    Name = entry.Name,
-                    Path = entry.FullName,
-                    Extension = entry is FileInfo file ? file.Extension : string.Empty,
-                    IsDirectory = entry is DirectoryInfo,
-                    Expanded = false
-                };
+                entries = new DirectoryInfo(currentDir).EnumerateFileSystemInfos();
             }
-            catch (UnauthorizedAccessException)
+            catch (UnauthorizedAccessException ex)
             {
-                continue; // 跳过无权限的文件/文件夹
+                logger.LogWarning("Access denied to {Path}: {Msg}", dirPath, ex.Message);
+                yield break; // 如果根目录都打不开，直接退出
             }
-            catch (PathTooLongException)
+            catch (DirectoryNotFoundException)
             {
-                logger.LogWarning("Path too long: {Name}", entry.Name);
-                continue;
-            }
-            catch (Exception ex)
-            {
-                logger.LogError(ex, "Error reading:  {Name}", entry.Name);
                 continue;
             }
 
-            yield return node;
+            foreach (var entry in entries)
+            {
+                token.ThrowIfCancellationRequested();
+                if (++count % 100 == 0)
+                {
+                    await Task.Yield();
+                }
+
+                FileNode node;
+                try
+                {
+                    node = new FileNode
+                    {
+                        Name = entry.Name,
+                        Path = entry.FullName,
+                        Extension = entry is FileInfo file ? file.Extension : string.Empty,
+                        IsDirectory = entry is DirectoryInfo,
+                        ParentPath = currentDir,
+                        Expanded = false
+                    };
+                }
+                catch (UnauthorizedAccessException)
+                {
+                    continue; // 跳过无权限的文件/文件夹
+                }
+                catch (PathTooLongException)
+                {
+                    logger.LogWarning("Path too long: {Name}", entry.Name);
+                    continue;
+                }
+                catch (Exception ex)
+                {
+                    logger.LogError(ex, "Error reading:  {Name}", entry.Name);
+                    continue;
+                }
+
+                yield return node;
+                
+                // BFS: enqueue directories for further exploration
+                if (entry is DirectoryInfo)
+                {
+                    queue.Enqueue(entry.FullName);
+                }
+            }
         }
     }
 

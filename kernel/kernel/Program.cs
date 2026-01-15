@@ -37,7 +37,6 @@ builder.Services.AddCors(options =>
 builder.Services.AddSingleton<TerminalService>();
 builder.Services.AddSingleton<PythonVenvRunner>();
 builder.Services.AddSingleton<FileService>();
-builder.Services.AddSingleton<LayoutService>();
 builder.Services.AddSignalR();
 
 var app = builder.Build();
@@ -52,14 +51,10 @@ app.UseRouting();
 // Map SignalR hubs - log each mapping for easier debugging
 app.MapHub<PythonHub>("/kernelHub");
 app.Logger.LogInformation("Mapped hub: {Path} -> {Hub}", LogFormatter.ToMagenta("/kernelHub"), LogFormatter.ToCyan("PythonHub"));
-app.MapHub<MarkdownHub>("/mdHub");
-app.Logger.LogInformation("Mapped hub: {Path} -> {Hub}", LogFormatter.ToMagenta("/mdHub"), LogFormatter.ToCyan("MarkdownHub"));
 app.MapHub<TerminalHub>("/terminalHub");
 app.Logger.LogInformation("Mapped hub: {Path} -> {Hub}", LogFormatter.ToMagenta("/terminalHub"), LogFormatter.ToCyan("TerminalHub"));
 app.MapHub<FileHub>("/fileHub");
 app.Logger.LogInformation("Mapped hub: {Path} -> {Hub}", LogFormatter.ToMagenta("/fileHub"), LogFormatter.ToCyan("FileHub"));
-app.MapHub<LayoutHub>("/layoutHub");
-app.Logger.LogInformation("Mapped hub: {Path} -> {Hub}", LogFormatter.ToMagenta("/layoutHub"), LogFormatter.ToCyan("LayoutHub"));
 
 // Final run with a top-level try to ensure we log unhandled shutdowns
 try

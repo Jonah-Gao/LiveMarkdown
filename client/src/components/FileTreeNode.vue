@@ -1,17 +1,10 @@
 ﻿<script setup lang="ts">
 import {defineProps} from 'vue'
+import {UIFileNode} from "@/types/workspace.ts";
 
-interface FileNode {
-    name: string
-    path: string
-    extension: string
-    isDirectory: boolean
-    children?: FileNode[]
-    expanded?: boolean
-}
 
 interface Props {
-    node: FileNode
+    node: UIFileNode
 }
 
 defineProps<Props>()
@@ -47,11 +40,11 @@ Object.entries(categoryMap).forEach(([category, extensions]) => {
 });
 
 const emit = defineEmits<{
-    toggleFolder: [node: FileNode]
-    openFile: [node: FileNode]
+    toggleFolder: [node: UIFileNode]
+    openFile: [node: UIFileNode]
 }>()
 
-function handleClick(node: FileNode) {
+function handleClick(node: UIFileNode) {
     if (node.isDirectory) {
         emit('toggleFolder', node)
     } else {
