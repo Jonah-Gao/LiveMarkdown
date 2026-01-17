@@ -29,3 +29,22 @@ contextBridge.exposeInMainWorld("nodePath", {
     dirname: (p: string): string => path.dirname(p),
     basename: (p: string, ext?: string): string => path.basename(p, ext)
 })
+
+contextBridge.exposeInMainWorld('windowControls', {
+    minimize: () => ipcRenderer.send('win:minimize'),
+    maximize: () => ipcRenderer.send('win:maximize'),
+    close: () => ipcRenderer.send('win:close'),
+    canClose: () => ipcRenderer.send('win:can-close'),
+
+    onMaximize: (cb: (maximized: boolean) => void) => {
+        ipcRenderer.on('win:maximized', (_e, v) => cb(v))
+    },
+    onBeforeClose: (cb: () => void) => {
+        ipcRenderer.on("app:before-close", cb)
+    }
+})
+
+contextBridge.exposeInMainWorld("cwd", {
+    setCwd: (cwd: string) => ipcRenderer.send("cwd:set", cwd),
+    getCwd: () => ipcRenderer.invoke("cwd:get")
+})

@@ -1,4 +1,5 @@
-﻿using kernel.Services;
+﻿using System.Threading.Channels;
+using kernel.Services;
 using kernel.Utils;
 using Microsoft.AspNetCore.SignalR;
 
@@ -13,21 +14,27 @@ public class FileHub(FileService fileService, ILogger<FileHub> logger) : Hub
         return fileService.ReadDirAsync(dirPath);
     }
 
-    public IAsyncEnumerable<FileService.TabChunk> StreamTabAsync(string fileName, string filePath)
+    public IAsyncEnumerable<FileService.TabChunk> StreamTabAsync(string filePath)
     {
         logger.LogInformation("Creating tab for file: {FilePath}", LogFormatter.ToGreen(filePath));
-        return fileService.StreamTabAsync(fileName, filePath);
+        return fileService.StreamTabAsync(filePath);
     }
 
-    public IAsyncEnumerable<FileService.FileNode> QuickScanAsync(string dirPath, int maxDepth = 1)
+    public async Task SaveFileAsync(string filePath, ChannelReader<string> stream)
     {
-        logger.LogDebug("Quick scanning directory: {DirPath}", LogFormatter.ToGreen(dirPath));
-        return fileService.QuickScanAsync(dirPath, maxDepth);
+        logger.LogInformation("Saving file: {FilePath}", LogFormatter.ToGreen(filePath));
+        await fileService.SaveFileAsync(filePath, stream);
     }
 
-    public IAsyncEnumerable<FileService.FileIndexEntry> DeepIndexAsync(string dirPath)
+    public async Task SaveWorkspaceSettingsAsync(string cwd, FileService.PanelLayout layout)
     {
-        logger.LogInformation("Starting deep index for: {DirPath}", LogFormatter.ToGreen(dirPath));
-        return fileService.DeepIndexAsync(dirPath);
+        logger.LogInformation("Saving panel layout to: {layoutPath}", LogFormatter.ToGreen(layout.WorkingDirectory));
+        await fileService.SaveWorkspaceSettingsAsync(cwd, layout);
+    }
+
+    public async Task<FileService.PanelLayout?> LoadWorkspaceSettingsAsync(string cwd)
+    {
+        logger.LogInformation("Loading panel layout from: {layoutPath}", LogFormatter.ToGreen(cwd));
+        return await fileService.LoadWorkspaceSettingsAsync(cwd);
     }
 }

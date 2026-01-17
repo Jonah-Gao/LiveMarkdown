@@ -4,6 +4,7 @@ import SIGNALR_CONFIG from '@/config/signalr.json'
 export const terminalConnection = new signalR.HubConnectionBuilder()
     .withUrl(SIGNALR_CONFIG.terminalHub)
     .withAutomaticReconnect()
+    .withHubProtocol(new signalR.JsonHubProtocol())
     .build()
 
 export async function ensureTerminalConnection() {

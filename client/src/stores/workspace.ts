@@ -1,16 +1,12 @@
 ﻿import {computed, reactive, ref, watch} from 'vue'
 import {defineStore} from 'pinia'
 import {MarkdownParser} from '@markdown/markdown'
-import {ensureFileServiceConnection, readDirectory, streamTab} from '@/services/fileService'
+import {readDirectory, streamTab, saveTabAsync, saveWorkspaceSettingsAsync, loadLayoutAsync} from '@/services/fileService'
 import {FileNode, PanelLayout, Tab, UIFileNode, ViewMode} from '@/types/workspace'
 
 const md = new MarkdownParser()
 
-const DEFAULT_UNTITLED_NAME = 'Untitled.md'
-const envRootDirectory = (window as any).process?.env?.ROOT_DIRECTORY
-const userHomeDirectory = (window as any).process?.env?.HOME || (window as any).process?.env?.USERPROFILE
-// const DEFAULT_ROOT_DIRECTORY = envRootDirectory || userHomeDirectory || '/'
-const DEFAULT_ROOT_DIRECTORY = "E:\\CS_NEA_Project\\test"
+const DEFAULT_ROOT_DIRECTORY = ''
 const MIN_EXPLORER_WIDTH = 160
 const MAX_EXPLORER_WIDTH = 520
 const MIN_TERMINAL_HEIGHT = 150
@@ -19,30 +15,31 @@ const MIN_PREVIEW_RATIO = 0.15
 const MAX_PREVIEW_RATIO = 0.85
 
 const LANGUAGE_BY_EXTENSION: Record<string, string> = {
-    '.ts': 'typescript',
-    '.tsx': 'typescript',
-    '.js': 'javascript',
-    '.jsx': 'javascript',
-    '.json': 'json',
-    '.py': 'python',
-    '.cs': 'csharp',
-    '.cpp': 'cpp',
-    '.c': 'c',
-    '.java': 'java',
-    '.rb': 'ruby',
-    '.go': 'go',
-    '.rs': 'rust',
-    '.html': 'html',
+    '.ts': 'Typescript',
+    '.tsx': 'Typescript',
+    '.js': 'Javascript',
+    '.jsx': 'Javascript',
+    '.json': 'Json',
+    '.py': 'Python',
+    '.cs': 'Csharp',
+    '.cpp': 'C++',
+    '.c': 'C',
+    '.java': 'Java',
+    '.rb': 'Ruby',
+    '.go': 'Go',
+    '.rs': 'Rust',
+    '.html': 'Html',
     '.css': 'css',
     '.scss': 'scss',
-    '.md': 'markdown',
-    '.mdx': 'markdown',
+    '.md': 'Markdown',
+    '.mdx': 'Markdown',
     '.sql': 'sql',
-    '.yml': 'yaml',
-    '.yaml': 'yaml',
-    '.sh': 'shell',
-    '.ps1': 'powershell',
-    '.vue': 'vue'
+    '.yml': 'Yaml',
+    '.yaml': 'Yaml',
+    '.sh': 'Shell',
+    '.ps1': 'Powershell',
+    '.vue': 'Vue',
+    'txt': 'Plaintext'
 }
 
 const SIDEBAR_BUTTONS = {
@@ -67,29 +64,17 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     const activeIndexBottom = ref<number | null>(null)
     const explorerVisible = ref(true)
 
-    const code = ref('# Untitled')
-    const tabs = ref<Tab[]>([
-        {
-            id: 'untitled-1',
-            name: DEFAULT_UNTITLED_NAME,
-            path: '',
-            content: '# Untitled',
-            isDirty: false,
-        }
-    ])
-    const activeTabIndex = ref(0)
+    const code = ref()
+    const tabs = ref<Tab[]>([])
+    const activeTabIndex = ref(-1)
     const currentViewMode = ref<ViewMode>('split')
 
-    const layoutState = reactive<PanelLayout>({
-        ExplorerWidth: 240,
-        TerminalHeight: 250,
-        EditorPreviewRatio: 0.5,
-        PreferredViewMode: 'split'
-    })
 
     const fileTree = ref<UIFileNode[]>([])
     const nodes = reactive(new Map<string, FileNode>())
     const rootDirectory = ref(DEFAULT_ROOT_DIRECTORY)
+    const projectName = ref('')
+    const pythonInterpreterPath = ref('')
     const resizeState = reactive({
         type: null as 'explorer' | 'preview' | 'terminal' | null,
         startX: 0,
@@ -98,7 +83,22 @@ export const useWorkspaceStore = defineStore('workspace', () => {
         containerWidth: 0
     })
 
+    const layoutState = reactive<PanelLayout>({
+        explorerWidth: 240,
+        terminalHeight: 250,
+        editorPreviewRatio: 0.5,
+        preferredViewMode: 'split',
+        openedFiles: tabs.value.map(t => t.path)
+    })
+
+    const hasWorkspace = computed(() => !!rootDirectory.value)
+    const hasTabs = computed(() => tabs.value.length > 0)
+
     const visibleFileTree = computed<UIFileNode[]>(() => {
+        if (!rootDirectory.value) {
+            return []
+        }
+
         function build(path: string): UIFileNode | null {
             const node = nodes.get(path)
             if (!node) return null
@@ -128,13 +128,13 @@ export const useWorkspaceStore = defineStore('workspace', () => {
         const path = activeTab.value?.path?.toLowerCase() || ''
         return name.endsWith('.md') || path.endsWith('.md')
     })
-    const showExplorer = computed(() => activeIndexTop.value === 0 && explorerVisible.value)
-    const showTerminal = computed(() => activeIndexBottom.value === 1)
+    const showExplorer = computed(() => hasWorkspace.value && activeIndexTop.value === 0 && explorerVisible.value)
+    const showTerminal = computed(() => hasWorkspace.value && activeIndexBottom.value === 1)
     const showTerminalArea = computed(() => showTerminal.value)
-    const showPreviewPane = computed(() => isMarkdownTab.value && currentViewMode.value !== 'code')
-    const showCodePane = computed(() => !isMarkdownTab.value || currentViewMode.value !== 'preview')
-    const explorerStyle = computed(() => ({width: `${layoutState.ExplorerWidth}px`}))
-    const terminalStyle = computed(() => ({height: `${layoutState.TerminalHeight}px`}))
+    const showPreviewPane = computed(() => hasTabs.value && isMarkdownTab.value && currentViewMode.value !== 'code')
+    const showCodePane = computed(() => hasTabs.value && (!isMarkdownTab.value || currentViewMode.value !== 'preview'))
+    const explorerStyle = computed(() => ({width: `${layoutState.explorerWidth}px`}))
+    const terminalStyle = computed(() => ({height: `${layoutState.terminalHeight}px`}))
     const currentLanguage = computed(() => {
         const name = (activeTab.value?.path || activeTab.value?.name || '').toLowerCase()
         const extIndex = name.lastIndexOf('.')
@@ -142,7 +142,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
         if (ext && LANGUAGE_BY_EXTENSION[ext]) {
             return LANGUAGE_BY_EXTENSION[ext]
         }
-        return isMarkdownTab.value ? 'Markdown' : 'plaintext'
+        return ''
     })
     const editorPaneStyle = computed(() => {
         if (!showCodePane.value) {
@@ -151,7 +151,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
         if (!showPreviewPane.value) {
             return {flex: 1, minWidth: 0}
         }
-        return {flex: layoutState.EditorPreviewRatio, minWidth: 0}
+        return {flex: layoutState.editorPreviewRatio, minWidth: 0}
     })
     const previewPaneStyle = computed(() => {
         if (!showPreviewPane.value) {
@@ -160,13 +160,28 @@ export const useWorkspaceStore = defineStore('workspace', () => {
         if (!showCodePane.value) {
             return {flex: 1, minWidth: 0}
         }
-        return {flex: 1 - layoutState.EditorPreviewRatio, minWidth: 0}
+        return {flex: 1 - layoutState.editorPreviewRatio, minWidth: 0}
     })
 
     watch(activeTab, (tab) => {
+        if (!tab) {
+            code.value = ''
+            applyViewModeForActiveTab()
+            return
+        }
         code.value = tab?.content || ''
         applyViewModeForActiveTab()
     }, {immediate: true})
+
+    watch(code, (newCode) => {
+        const tab: Tab = activeTab.value
+        if (!tab) return
+
+        if (newCode !== tab.content) {
+            tab.isDirty = true
+            tab.content = newCode
+        }
+    })
 
     function clamp(value: number, min: number, max: number) {
         return Math.min(Math.max(value, min), max)
@@ -203,25 +218,53 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     }
 
     function openTab(tab: Tab) {
-        activeTabIndex.value = tabs.value.findIndex(t => t.id === tab.id)
+        const targetIndex = tabs.value.findIndex(t => t.id === tab.id)
+
+        if (targetIndex === -1) return
+
+        activeTabIndex.value = targetIndex
         code.value = tab.content
         applyViewModeForActiveTab()
     }
 
-    function closeTab(tab: Tab) {
+    async function closeTab(tab: Tab) {
+        if (tab.isDirty) {
+            await saveTabAsync(tab.path, tab.content)
+            tab.isDirty = false
+        }
+
         const index = tabs.value.findIndex(t => t.id === tab.id)
         if (index !== -1) {
             tabs.value.splice(index, 1)
-            if (activeTabIndex.value === index) {
-                activeTabIndex.value = Math.max(0, index - 1)
-                code.value = tabs.value[activeTabIndex.value]?.content || ''
+            layoutState.openedFiles = tabs.value.map(t => t.path)
+            if (tabs.value.length === 0) {
+                activeTabIndex.value = -1
+                code.value = ''
                 applyViewModeForActiveTab()
+                return
             }
+
+            if (activeTabIndex.value >= index) {
+                activeTabIndex.value = Math.max(0, tabs.value.length - 1)
+            }
+            code.value = tabs.value[activeTabIndex.value]?.content || ''
+            applyViewModeForActiveTab()
+        }
+    }
+
+    async function saveDirtyTabs() {
+        for (const tab of tabs.value.filter((t: Tab): boolean => t.isDirty)) {
+            await saveTabAsync(tab.path, tab.content)
+            tab.isDirty = false
         }
     }
 
     function applyViewModeForActiveTab() {
-        currentViewMode.value = isMarkdownTab.value ? layoutState.PreferredViewMode : 'code'
+        if (!hasTabs.value) {
+            currentViewMode.value = 'code'
+            return
+        }
+        currentViewMode.value = isMarkdownTab.value ? layoutState.preferredViewMode : 'code'
     }
 
     function setViewMode(mode: ViewMode) {
@@ -229,14 +272,14 @@ export const useWorkspaceStore = defineStore('workspace', () => {
             return
         }
         currentViewMode.value = mode
-        layoutState.PreferredViewMode = mode
+        layoutState.preferredViewMode = mode
     }
 
     function startExplorerResize(event: MouseEvent) {
         if (!showExplorer.value) return
         resizeState.type = 'explorer'
         resizeState.startX = event.clientX
-        resizeState.startSize = layoutState.ExplorerWidth
+        resizeState.startSize = layoutState.explorerWidth
         attachResizeListeners()
     }
 
@@ -245,7 +288,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
         resizeState.type = 'preview'
         resizeState.startX = event.clientX
         resizeState.containerWidth = containerWidth
-        resizeState.startSize = containerWidth * layoutState.EditorPreviewRatio
+        resizeState.startSize = containerWidth * layoutState.editorPreviewRatio
         attachResizeListeners()
     }
 
@@ -253,7 +296,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
         if (!showTerminalArea.value) return
         resizeState.type = 'terminal'
         resizeState.startY = event.clientY
-        resizeState.startSize = layoutState.TerminalHeight
+        resizeState.startSize = layoutState.terminalHeight
         attachResizeListeners()
     }
 
@@ -266,17 +309,17 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     function handleResizeDrag(event: MouseEvent) {
         if (resizeState.type === 'explorer') {
             const delta = event.clientX - resizeState.startX
-            layoutState.ExplorerWidth = clamp(resizeState.startSize + delta, MIN_EXPLORER_WIDTH, MAX_EXPLORER_WIDTH)
+            layoutState.explorerWidth = clamp(resizeState.startSize + delta, MIN_EXPLORER_WIDTH, MAX_EXPLORER_WIDTH)
         } else if (resizeState.type === 'preview') {
             const delta = event.clientX - resizeState.startX
             const allowedMin = resizeState.containerWidth * MIN_PREVIEW_RATIO
             const allowedMax = resizeState.containerWidth * MAX_PREVIEW_RATIO
             const newWidth = clamp(resizeState.startSize + delta, allowedMin, allowedMax)
             const safeContainerWidth = Math.max(resizeState.containerWidth, 1)
-            layoutState.EditorPreviewRatio = clamp(newWidth / safeContainerWidth, MIN_PREVIEW_RATIO, MAX_PREVIEW_RATIO)
+            layoutState.editorPreviewRatio = clamp(newWidth / safeContainerWidth, MIN_PREVIEW_RATIO, MAX_PREVIEW_RATIO)
         } else if (resizeState.type === 'terminal') {
             const delta = resizeState.startY - event.clientY
-            layoutState.TerminalHeight = clamp(resizeState.startSize + delta, MIN_TERMINAL_HEIGHT, MAX_TERMINAL_HEIGHT)
+            layoutState.terminalHeight = clamp(resizeState.startSize + delta, MIN_TERMINAL_HEIGHT, MAX_TERMINAL_HEIGHT)
         }
     }
 
@@ -323,8 +366,8 @@ export const useWorkspaceStore = defineStore('workspace', () => {
             })
     }
 
-    async function StreamTabAsync(fileName: string, filePath: string): Promise<void> {
-        (await streamTab(fileName, filePath))
+    async function StreamTabAsync(filePath: string): Promise<void> {
+        (await streamTab(filePath))
             .subscribe({
                 next: (chunk) => {
                     if (chunk.isMetadata) {
@@ -336,6 +379,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
                             isDirty: false,
                         }
                         tabs.value.push(tab)
+                        layoutState.openedFiles = tabs.value.map(t => t.path)
                         openTab(tab)
                     } else if (chunk.isError) {
                         console.error('Error loading tab:', chunk.content)
@@ -359,6 +403,9 @@ export const useWorkspaceStore = defineStore('workspace', () => {
 
     async function loadFileTree() {
         nodes.clear()
+        if (!rootDirectory.value) {
+            return
+        }
         const nodePath = (window as any).nodePath
         const rootName = nodePath?.basename
             ? nodePath.basename(rootDirectory.value)
@@ -382,14 +429,14 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     }
 
     async function openFile(node: UIFileNode) {
-        if (node.isDirectory) return
+        if (!rootDirectory.value || node.isDirectory) return
 
         try {
             const existingTab = tabs.value.find(tab => tab.path === node.path);
             if (existingTab) {
                 openTab(existingTab)
             } else {
-                await StreamTabAsync(node.name, node.path);
+                await StreamTabAsync(node.path);
             }
         } catch (err) {
             console.error('Error opening file:', err);
@@ -397,8 +444,61 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     }
 
     async function initializeWorkspace() {
-        await ensureFileServiceConnection()
+        if (!rootDirectory.value) {
+            return
+        }
         await loadFileTree()
+    }
+
+    function resetTabs() {
+        tabs.value = []
+        activeTabIndex.value = -1
+        code.value = ''
+        applyViewModeForActiveTab()
+    }
+
+    async function setWorkspaceDirectory(directoryPath: string) {
+        nodes.clear()
+        fileTree.value = []
+        rootDirectory.value = directoryPath.trim()
+        if (!rootDirectory.value) {
+            return
+        }
+        await loadFileTree()
+    }
+
+    async function openWorkspace(directoryPath: string) {
+        resetTabs()
+        await setWorkspaceDirectory(directoryPath)
+    }
+
+    async function createNewWorkspace(options: {
+        projectName: string,
+        directoryPath: string,
+        pythonInterpreter: string
+    }) {
+        projectName.value = options.projectName
+        pythonInterpreterPath.value = options.pythonInterpreter
+        await openWorkspace(options.directoryPath)
+    }
+
+    async function saveWorkspaceSettings() {
+        await saveWorkspaceSettingsAsync(rootDirectory.value, layoutState)
+    }
+
+    async function loadWorkspaceSettings() {
+        const settings = await loadLayoutAsync(rootDirectory.value)
+        if (settings) {
+            layoutState.explorerWidth = settings.explorerWidth
+            layoutState.terminalHeight = settings.terminalHeight
+            layoutState.editorPreviewRatio = settings.editorPreviewRatio
+            layoutState.preferredViewMode = settings.preferredViewMode
+            layoutState.openedFiles = settings.openedFiles
+            await openWorkspace(rootDirectory.value)
+            for (const filePath of layoutState.openedFiles) {
+                await StreamTabAsync(filePath)
+            }
+        }
     }
 
     return {
@@ -414,10 +514,13 @@ export const useWorkspaceStore = defineStore('workspace', () => {
         fileTree,
         nodes,
         rootDirectory,
+        projectName,
+        pythonInterpreterPath,
         resizeState,
+        hasWorkspace,
+        hasTabs,
         sidebarButtons: SIDEBAR_BUTTONS,
         viewModeButtons: VIEW_MODE_BUTTONS,
-        defaultUntitledName: DEFAULT_UNTITLED_NAME,
 
         // getters
         visibleFileTree,
@@ -451,6 +554,13 @@ export const useWorkspaceStore = defineStore('workspace', () => {
         toggleFolder,
         openFile,
         initializeWorkspace,
+        saveDirtyTabs,
         applyViewModeForActiveTab,
+        resetTabs,
+        openWorkspace,
+        createNewWorkspace,
+        setWorkspaceDirectory,
+        saveWorkspaceSettings,
+        loadWorkspaceSettings
     }
 })

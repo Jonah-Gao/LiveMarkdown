@@ -7,12 +7,12 @@ using Microsoft.AspNetCore.SignalR;
 
 public class TerminalHub(TerminalService terminalService, ILogger<TerminalHub> logger) : Hub
 {
-    public async Task TerminalInit()
+    public async Task TerminalInit(string cwd)
     {
         var connectionId = Context.ConnectionId;
         logger.LogInformation("Initializing terminal for connection: {ConnectionId}", LogFormatter.ToCyan(connectionId));
 
-        await terminalService.StartTerminalAsync(connectionId, "TerminalOutput");
+        await terminalService.StartTerminalAsync(connectionId, "TerminalOutput", cwd);
     }
 
     public async Task TerminalInput(string data)

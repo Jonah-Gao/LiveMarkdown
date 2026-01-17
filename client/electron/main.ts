@@ -1,9 +1,14 @@
-import {app, BrowserWindow} from 'electron';
+import {app, BrowserWindow, Menu} from 'electron';
 import {fileURLToPath} from 'node:url';
 import path from 'node:path';
+import {ipcMain} from 'electron'
+import Store from "electron-store"
 
 
 const __dirname: string = path.dirname(fileURLToPath(import.meta.url));
+const store = new Store<{
+    lastCwd?: string
+}>()
 
 // The built directory structure
 
@@ -23,8 +28,13 @@ export const RENDERER_DIST = path.join(process.env.APP_ROOT, 'dist')
 process.env.VITE_PUBLIC = VITE_DEV_SERVER_URL ? path.join(process.env.APP_ROOT, 'public') : RENDERER_DIST
 
 let win: BrowserWindow | null
+let pendingClose = false;
+let allowClose = false;
 
 async function createWindow(): Promise<void> {
+
+    pendingClose = false;
+    allowClose = false;
 
     win = new BrowserWindow({
         width: 1200,
@@ -35,6 +45,7 @@ async function createWindow(): Promise<void> {
             nodeIntegration: false,
             sandbox: false,
         },
+        frame: false,
         icon: path.join(process.env.VITE_PUBLIC ?? "", 'electron-vite.svg'),
     })
     // Test active push message to Renderer-process.
@@ -42,6 +53,8 @@ async function createWindow(): Promise<void> {
     win.webContents.on('did-finish-load', () => {
         win?.webContents.send('main-process-message', (new Date).toLocaleString())
     })
+
+
     if (VITE_DEV_SERVER_URL) {
 
         await win.loadURL(VITE_DEV_SERVER_URL)
@@ -49,7 +62,55 @@ async function createWindow(): Promise<void> {
         // win.loadFile('dist/index.html')
         await win.loadFile(path.join(RENDERER_DIST, 'index.html'))
     }
+
+    win?.maximize()
+
+    win?.on('maximize', () => {
+        win?.webContents.send('win:maximized', true)
+    })
+
+    win?.on('unmaximize', () => {
+        win?.webContents.send('win:maximized', false)
+    })
+
+    win?.on('close', (e) => {
+        if (allowClose) return;
+        e.preventDefault();
+        if (pendingClose) return;
+        pendingClose = true;
+        win?.webContents.send('app:before-close');
+    });
 }
+
+
+ipcMain.on('win:minimize', () => win?.minimize())
+
+ipcMain.on('win:maximize', () => {
+    if (win?.isMaximized()) win.unmaximize()
+    else win?.maximize()
+})
+
+ipcMain.on('win:close', () => {
+    if (!win) return;
+    win.close();
+})
+
+ipcMain.on('win:can-close', () => {
+    if (!win) return;
+    allowClose = true;
+    pendingClose = false;
+    win.close();
+});
+
+ipcMain.handle("cwd:get", () => {
+    return store.get("lastCwd")
+})
+
+ipcMain.on("cwd:set", (_, cwd: string) => {
+    store.set("lastCwd", cwd)
+})
+
+
 // Quit when all windows are closed, except on macOS. There, it's common
 
 // for applications and their menu bar to stay active until the user quits
@@ -68,4 +129,9 @@ app.on('activate', async () => {
     }
 })
 
-app.whenReady().then(createWindow)
+app.whenReady().then(async () => {
+    if (!VITE_DEV_SERVER_URL) {
+        Menu.setApplicationMenu(null)
+    }
+    await createWindow()
+})

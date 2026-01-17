@@ -37,8 +37,9 @@ export interface TabChunk {
 export type ViewMode = 'code' | 'split' | 'preview'
 
 export interface PanelLayout {
-    ExplorerWidth: number
-    TerminalHeight: number
-    EditorPreviewRatio: number
-    PreferredViewMode: ViewMode
+    explorerWidth: number
+    terminalHeight: number
+    editorPreviewRatio: number
+    preferredViewMode: ViewMode,
+    openedFiles: string[]
 }

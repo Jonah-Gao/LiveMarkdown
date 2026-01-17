@@ -18,7 +18,7 @@ const EDITOR_OPTIONS = {
     <div class="editor-main" :style="editorPaneStyle" v-show="showCodePane">
         <CodeEditor
             v-model:value="code"
-            :language="currentLanguage"
+            :language="currentLanguage.toLowerCase()"
             :options="EDITOR_OPTIONS"
             theme="vs-dark"
             class="code-editor"

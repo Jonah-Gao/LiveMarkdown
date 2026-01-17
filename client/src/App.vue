@@ -17,6 +17,7 @@ import Editor from './components/Editor.vue'
 import Preview from './components/Preview.vue'
 import Terminal from './components/Terminal.vue'
 import {useWorkspaceStore} from '@/stores/workspace'
+import NavigationBar from "@/components/NavigationBar.vue";
 
 const workspace = useWorkspaceStore()
 const {
@@ -26,11 +27,12 @@ const {
     showCodePane,
     showPreviewPane,
     activeTab,
+    hasTabs,
+    hasWorkspace,
 } = storeToRefs(workspace)
 
 const sidebarButtons = workspace.sidebarButtons
 const viewModeButtons = workspace.viewModeButtons
-const defaultUntitledName = workspace.defaultUntitledName
 
 const editorPane = ref<HTMLElement | null>(null)
 
@@ -40,15 +42,22 @@ function startPreviewResize(event: MouseEvent) {
 }
 
 onMounted(async () => {
+    workspace.rootDirectory = await window.cwd.getCwd();
     await workspace.initializeWorkspace()
+    await workspace.loadWorkspaceSettings()
+    window.windowControls.onBeforeClose(() => {
+        workspace.saveDirtyTabs()
+        workspace.saveWorkspaceSettings()
+        window.cwd.setCwd(workspace.rootDirectory);
+        window.windowControls.canClose();
+    })
 })
 
-onBeforeUnmount(() => {
-})
 </script>
 
 <template>
     <div class="window">
+        <NavigationBar/>
         <div class="window-workspace">
             <div class="tool-bar">
                 <div class="general-action">
@@ -78,30 +87,49 @@ onBeforeUnmount(() => {
 
             <div class="workspace-wrapper">
                 <div class="workspace">
-                    <FileExplorer
-                        v-show="showExplorer"
-                        :style="explorerStyle"
-                    />
-                    <div v-show="showExplorer" class="vertical-resizer" @mousedown="workspace.startExplorerResize"></div>
+                    <template v-if="hasWorkspace">
+                        <FileExplorer
+                            v-show="showExplorer"
+                            :style="explorerStyle"
+                        />
+                        <div v-show="showExplorer" class="vertical-resizer"
+                             @mousedown="workspace.startExplorerResize"></div>
 
-                    <div class="editor-container">
-                        <TabsBar :view-mode-buttons="viewModeButtons" />
-                        <div class="editor" ref="editorPane">
-                            <Editor />
-
+                        <div class="editor-container">
+                            <TabsBar v-if="hasTabs" :view-mode-buttons="viewModeButtons"/>
                             <div
-                                v-show="showCodePane && showPreviewPane"
-                                class="split-resizer"
-                                @mousedown="startPreviewResize"
-                            ></div>
+                                v-if="hasTabs"
+                                class="editor"
+                                ref="editorPane"
+                            >
+                                <Editor/>
 
-                            <Preview />
+                                <div
+                                    v-show="showCodePane && showPreviewPane"
+                                    class="split-resizer"
+                                    @mousedown="startPreviewResize"
+                                ></div>
+
+                                <Preview/>
+                            </div>
+                            <div v-else class="workspace-empty">
+                                <p>Select a file from the explorer to start editing.</p>
+                            </div>
                         </div>
+                    </template>
+                    <div v-else class="workspace-empty">
+                        <p>Select a workspace from File &gt; Open or File &gt; New.</p>
                     </div>
                 </div>
 
-                <div v-show="showTerminalArea" class="horizontal-resizer" @mousedown="workspace.startTerminalResize"></div>
-                <Terminal v-show="showTerminalArea" />
+                <div
+                    v-if="hasWorkspace && showTerminalArea"
+                    class="horizontal-resizer"
+                    @mousedown="workspace.startTerminalResize"
+                ></div>
+                <template v-if="hasWorkspace">
+                    <Terminal v-show="showTerminalArea"/>
+                </template>
             </div>
         </div>
 
@@ -113,12 +141,12 @@ onBeforeUnmount(() => {
                 </div>
                 <div class="status-item">
                     <span class="material-symbols-outlined">description</span>
-                    <span>{{ activeTab?.name || defaultUntitledName }}</span>
+                    <span>{{ hasTabs ? activeTab?.name : 'No file open' }}</span>
                 </div>
             </div>
             <div class="status-bar-right">
                 <div class="status-item">
-                    <span>Markdown</span>
+                    <span>{{ workspace.currentLanguage }}</span>
                 </div>
                 <div class="status-item">
                     <span>UTF-8</span>

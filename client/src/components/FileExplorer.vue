@@ -4,7 +4,7 @@ import FileTreeNode from './FileTreeNode.vue'
 import {useWorkspaceStore} from '@/stores/workspace'
 
 const workspace = useWorkspaceStore()
-const {visibleFileTree} = storeToRefs(workspace)
+const {visibleFileTree, hasWorkspace} = storeToRefs(workspace)
 </script>
 
 <template>
@@ -23,7 +23,7 @@ const {visibleFileTree} = storeToRefs(workspace)
             </div>
         </div>
 
-        <div v-if="visibleFileTree" class="file-explorer">
+        <div v-if="hasWorkspace && visibleFileTree.length" class="file-explorer">
             <FileTreeNode
                 v-for="node in visibleFileTree"
                 :key="node.path"
@@ -31,6 +31,9 @@ const {visibleFileTree} = storeToRefs(workspace)
                 @toggleFolder="workspace.toggleFolder"
                 @openFile="workspace.openFile"
             />
+        </div>
+        <div v-else class="file-explorer empty">
+            <p>Select a workspace to load files.</p>
         </div>
     </div>
 </template>
@@ -43,5 +46,13 @@ const {visibleFileTree} = storeToRefs(workspace)
     overflow-y: auto;
     height: 100%;
     user-select: none;
+}
+
+.file-explorer.empty {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-muted);
+    font-size: 13px;
 }
 </style>

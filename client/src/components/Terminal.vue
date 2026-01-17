@@ -1,5 +1,5 @@
 ﻿<script setup lang="ts">
-import {onBeforeUnmount, onMounted, ref, watch} from 'vue'
+import {onMounted, ref, watch} from 'vue'
 import {storeToRefs} from 'pinia'
 import {Terminal as XTerminal} from '@xterm/xterm'
 import {FitAddon} from '@xterm/addon-fit'
@@ -77,7 +77,7 @@ onMounted(async () => {
     await initializeTerminal()
     await ensureKernelConnected()
     try {
-        await terminalConnection.invoke('TerminalInit')
+        await terminalConnection.invoke('TerminalInit', workspace.rootDirectory)
     } catch (err) {
         console.error('Terminal initialization failed:', err)
     }
@@ -86,12 +86,12 @@ onMounted(async () => {
     window.addEventListener('resize', handleResize)
 })
 
-onBeforeUnmount(() => {
-    window.removeEventListener('resize', handleResize)
-    terminalConnection.off('TerminalOutput', handleTerminalOutput)
-    xterm?.dispose()
-    terminalConnection.stop().catch(err => console.error('Error closing terminal connection:', err))
-})
+// onBeforeUnmount(() => {
+//     window.removeEventListener('resize', handleResize)
+//     terminalConnection.off('TerminalOutput', handleTerminalOutput)
+//     xterm?.dispose()
+//     terminalConnection.stop().catch(err => console.error('Error closing terminal connection:', err))
+// })
 </script>
 
 <template>

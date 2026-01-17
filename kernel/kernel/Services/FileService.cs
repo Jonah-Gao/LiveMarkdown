@@ -1,23 +1,17 @@
-﻿using System.Collections.Concurrent;
-using System.Runtime.CompilerServices;
+﻿using System.Runtime.CompilerServices;
+using System.Runtime.Serialization;
+using System.Text;
+using System.Threading.Channels;
 using JetBrains.Annotations;
 using kernel.Utils;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace kernel.Services;
 
 // TODO: Directory watching to auto-refresh file tree and open tabs on changes
-// TODO: Indexing the directory in a background task for faster access
-// TODO: file operations: create, delete, rename, move, copy
 public class FileService(ILogger<FileService> logger)
 {
-    public record FileIndexEntry(
-        string Name,
-        string Path,
-        string Extension,
-        bool IsDirectory,
-        string? ParentPath,
-        int Depth);
-
     public class FileNode
     {
         [UsedImplicitly] public string Name { get; set; } = string.Empty;
@@ -38,12 +32,24 @@ public class FileService(ILogger<FileService> logger)
         [UsedImplicitly] public bool IsError { get; set; }
     }
 
-    private readonly ConcurrentDictionary<string, FileIndexEntry> _fileIndex =
-        new(StringComparer.OrdinalIgnoreCase);
+    [JsonConverter(typeof(JsonStringEnumConverter))]
+    public enum ViewMode
+    {
+        [EnumMember(Value = "code")] Code,
+        [EnumMember(Value = "split")] Split,
+        [EnumMember(Value = "preview")] Preview,
+    }
 
-    public IReadOnlyCollection<FileIndexEntry> SnapshotIndex() => _fileIndex.Values.ToArray();
+    public record PanelLayout(
+        double ExplorerWidth,
+        double TerminalHeight,
+        double EditorPreviewRatio,
+        ViewMode PreferredViewMode,
+        string WorkingDirectory,
+        string[] OpenedFiles
+    );
 
-    public async IAsyncEnumerable<TabChunk> StreamTabAsync(string fileName, string filePath,
+    public async IAsyncEnumerable<TabChunk> StreamTabAsync(string filePath,
         [EnumeratorCancellation] CancellationToken token = default)
     {
         var tabId = Guid.NewGuid().ToString();
@@ -52,7 +58,7 @@ public class FileService(ILogger<FileService> logger)
         yield return new TabChunk
         {
             Id = tabId,
-            Name = fileName,
+            Name = Path.GetFileName(filePath),
             Path = filePath,
             IsMetadata = true, // 标识这是元数据
             Content = ""
@@ -65,7 +71,7 @@ public class FileService(ILogger<FileService> logger)
     }
 
     private async IAsyncEnumerable<TabChunk> StreamFileContentAsync(string tabId, string filePath,
-        [EnumeratorCancellation] CancellationToken token)
+        [EnumeratorCancellation] CancellationToken token = default)
     {
         TabChunk? errorTabChunk = null;
         StreamReader? reader = null;
@@ -92,7 +98,7 @@ public class FileService(ILogger<FileService> logger)
 
         using (reader)
         {
-            const int chunkSize = 4096; // 4KB per chunk
+            const int chunkSize = 65536; // 64KiB per chunk
             var buffer = new char[chunkSize];
             using var stream = File.OpenText(filePath);
             int charsRead;
@@ -133,7 +139,7 @@ public class FileService(ILogger<FileService> logger)
             token.ThrowIfCancellationRequested();
 
             var currentDir = queue.Dequeue();
-            
+
             IEnumerable<FileSystemInfo> entries;
             try
             {
@@ -186,7 +192,7 @@ public class FileService(ILogger<FileService> logger)
                 }
 
                 yield return node;
-                
+
                 // BFS: enqueue directories for further exploration
                 if (entry is DirectoryInfo)
                 {
@@ -196,130 +202,136 @@ public class FileService(ILogger<FileService> logger)
         }
     }
 
-    private const int YieldInterval = 8;
-
-    public async IAsyncEnumerable<FileNode> QuickScanAsync(string dirPath, int maxDepth = 1,
-        [EnumeratorCancellation] CancellationToken token = default)
+    public async Task SaveFileAsync(string filePath, ChannelReader<string> stream, CancellationToken ct = default)
     {
-        if (maxDepth < 1)
+        if (string.IsNullOrWhiteSpace(filePath))
         {
-            maxDepth = 1;
+            logger.LogError("Invalid file path: {FilePath}", LogFormatter.ToBrightRed(filePath));
+            return;
         }
 
-        await foreach (var entry in EnumerateIndexEntries(dirPath, maxDepth, token))
+        // Normalize & restrict
+        var fullPath = Path.GetFullPath(filePath);
+        var dir = Path.GetDirectoryName(fullPath);
+        if (string.IsNullOrEmpty(dir))
         {
-            // Skip the root directory itself for the explorer list
-            if (entry.Depth == 0) continue;
-
-            yield return new FileNode
-            {
-                Name = entry.Name,
-                Path = entry.Path,
-                Extension = entry.Extension,
-                IsDirectory = entry.IsDirectory,
-                Expanded = entry.IsDirectory && entry.Depth < maxDepth
-            };
-        }
-    }
-
-    public async IAsyncEnumerable<FileIndexEntry> DeepIndexAsync(string dirPath,
-        [EnumeratorCancellation] CancellationToken token = default)
-    {
-        await foreach (var entry in EnumerateIndexEntries(dirPath, int.MaxValue, token))
-        {
-            yield return entry;
-        }
-    }
-
-    private async IAsyncEnumerable<FileIndexEntry> EnumerateIndexEntries(string dirPath, int maxDepth,
-        [EnumeratorCancellation] CancellationToken token)
-    {
-        if (string.IsNullOrWhiteSpace(dirPath))
-        {
-            yield break;
+            logger.LogError("Invalid file path: {FilePath}", LogFormatter.ToBrightRed(filePath));
+            return;
         }
 
-        DirectoryInfo? root;
+        Directory.CreateDirectory(dir);
+
+        var tempPath = Path.Combine(dir, $"{Path.GetFileName(fullPath)}.{Guid.NewGuid():N}.tmp");
+
         try
         {
-            root = new DirectoryInfo(dirPath);
-        }
-        catch (Exception ex)
-        {
-            logger.LogWarning(ex, "Invalid path supplied for indexing: {Path}", dirPath);
-            yield break;
-        }
-
-        if (!root.Exists)
-        {
-            logger.LogWarning("Skipping indexing for missing path: {Path}", dirPath);
-            yield break;
-        }
-
-        var stack = new Stack<(DirectoryInfo Dir, int Depth)>();
-        stack.Push((root, 0));
-
-        while (stack.Count > 0)
-        {
-            var (current, depth) = stack.Pop();
-            token.ThrowIfCancellationRequested();
-
-            if (depth == 0)
+            await using (var writer = new StreamWriter(tempPath, false, Encoding.UTF8, 65536))
             {
-                var dirEntry = new FileIndexEntry(current.Name, current.FullName, string.Empty, true,
-                    current.Parent?.FullName, depth);
-                _fileIndex[current.FullName] = dirEntry;
-                yield return dirEntry;
-            }
-
-            IEnumerable<FileSystemInfo> children;
-            try
-            {
-                children = current.EnumerateFileSystemInfos();
-            }
-            catch (UnauthorizedAccessException ex)
-            {
-                logger.LogWarning("Access denied while indexing {Path}: {Message}", current.FullName, ex.Message);
-                continue;
-            }
-            catch (PathTooLongException)
-            {
-                logger.LogWarning("Path too long while indexing: {Path}", current.FullName);
-                continue;
-            }
-            catch (Exception ex)
-            {
-                logger.LogError(ex, "Failed to enumerate children for {Path}", current.FullName);
-                continue;
-            }
-
-            foreach (var child in children)
-            {
-                token.ThrowIfCancellationRequested();
-
-                var isDir = child is DirectoryInfo;
-                var entry = new FileIndexEntry(
-                    child.Name,
-                    child.FullName,
-                    child is FileInfo fi ? fi.Extension : string.Empty,
-                    isDir,
-                    current.FullName,
-                    depth + 1);
-
-                _fileIndex[entry.Path] = entry;
-                yield return entry;
-
-                if (isDir && depth + 1 < maxDepth)
+                await foreach (var chunk in stream.ReadAllAsync(ct))
                 {
-                    stack.Push(((DirectoryInfo)child, depth + 1));
+                    await writer.WriteAsync(chunk);
                 }
             }
 
-            // Yield control periodically to keep the stream responsive
-            if (depth % YieldInterval == 0)
+            // Prefer same-volume atomic replace
+            if (File.Exists(fullPath))
             {
-                await Task.Yield();
+                File.Replace(tempPath, fullPath, destinationBackupFileName: null, ignoreMetadataErrors: true);
             }
+            else
+            {
+                File.Move(tempPath, fullPath, overwrite: true);
+            }
+
+            logger.LogInformation("File saved: {FilePath}", LogFormatter.ToGreen(fullPath));
+        }
+        catch
+        {
+            if (File.Exists(tempPath))
+                File.Delete(tempPath);
+        }
+    }
+
+    public async Task SaveWorkspaceSettingsAsync(string cwd, PanelLayout layout, CancellationToken ct = default)
+    {
+        var dirPath = layout.WorkingDirectory;
+        if (string.IsNullOrWhiteSpace(dirPath))
+        {
+            logger.LogError("Invalid layout path: {LayoutPath}", LogFormatter.ToBrightRed(dirPath));
+            return;
+        }
+
+        // Normalize & restrict
+        var fullPath = Path.GetFullPath(dirPath); // 工作目录
+        var settingsDir = Path.Combine(fullPath, ".LiveMarkdown");
+        var settingsFile = Path.Combine(settingsDir, "settings.json");
+        logger.LogInformation("Saving settings file: {SettingsFilePath}", LogFormatter.ToGreen(settingsFile));
+
+        Directory.CreateDirectory(settingsDir);
+
+        var tempPath = Path.Combine(
+            settingsDir,
+            $"{Path.GetFileName(fullPath)}.{Guid.NewGuid():N}.tmp"
+        );
+
+        try
+        {
+            var json = JsonSerializer.Serialize(
+                layout,
+                options: new JsonSerializerOptions { WriteIndented = true }
+            );
+
+            await File.WriteAllTextAsync(tempPath, json, Encoding.UTF8, ct);
+
+            // atomic replace (requires same volume)
+
+            if (File.Exists(settingsFile))
+            {
+                File.Replace(tempPath, settingsFile, destinationBackupFileName: null, ignoreMetadataErrors: true);
+            }
+            else
+            {
+                File.Move(tempPath, settingsFile, overwrite: true);
+            }
+
+            logger.LogInformation("Layout saved: {LayoutPath}", LogFormatter.ToGreen(settingsFile));
+        }
+        catch (Exception ex)
+        {
+            logger.LogError("Error saving layout: {ex}", LogFormatter.ToBrightRed(ex.Message));
+            if (File.Exists(tempPath))
+                File.Delete(tempPath);
+        }
+    }
+
+    public async Task<PanelLayout?> LoadWorkspaceSettingsAsync(string cwd, CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(cwd))
+        {
+            logger.LogError("Invalid layout path: {LayoutPath}", LogFormatter.ToBrightRed(cwd));
+            return null;
+        }
+
+        // Normalize & restrict
+        var fullPath = Path.GetFullPath(cwd);
+        var settingsDir = Path.Join(fullPath, ".LiveMarkdown", "settings.json");
+        if (!File.Exists(settingsDir))
+        {
+            logger.LogWarning("Layout file does not exist: {LayoutPath}", LogFormatter.ToBrightRed(settingsDir));
+            return null;
+        }
+
+        try
+        {
+            await using var stream = File.OpenRead(settingsDir);
+            var layout = await JsonSerializer.DeserializeAsync<PanelLayout>(stream, cancellationToken: ct);
+            logger.LogInformation("Layout loaded: {LayoutPath}", LogFormatter.ToGreen(settingsDir));
+            return layout;
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Error loading layout: {LayoutPath}", LogFormatter.ToBrightRed(fullPath));
+            return null;
         }
     }
 }

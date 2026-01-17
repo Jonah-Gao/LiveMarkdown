@@ -10,10 +10,14 @@
     --border-radius-md: 6px;
     --border-radius-lg: 8px;
 
-    /* Colors - Professional Dark Theme */
+    /* Colors - Dark Theme */
     --accent-color: #58a6ff;
     --accent-color-hover: #79b8ff;
     --accent-color-muted: rgba(88, 166, 255, 0.15);
+    --accent-color-secondary: #f78166;
+    --accent-color-hover-secondary: #fa9e87;
+    --accent-color-muted-secondary: rgba(247, 129, 102, 0.15);
+    --bg-hover: rgba(255, 255, 255, 0.05);
     --success-color: #3fb950;
     --warning-color: #d29922;
     --error-color: #f85149;
@@ -112,6 +116,25 @@ body {
     position: relative;
 }
 
+.workspace-empty {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-muted);
+    background-color: var(--bg-secondary);
+    border: 1px dashed var(--widget-border-color);
+    margin: 12px;
+    border-radius: var(--border-radius-md);
+    text-align: center;
+    padding: 12px;
+}
+
+.workspace-empty p {
+    margin: 0;
+}
+
+
 /* ===========================================
    SIDEBAR & TOOLBAR
    =========================================== */
@@ -184,7 +207,7 @@ body {
 
 .badge:hover {
     color: var(--text-primary);
-    background-color: rgba(255, 255, 255, 0.04);
+    background-color: var(--bg-hover);
 }
 
 .badge.active {
@@ -200,7 +223,7 @@ body {
     transform: translateY(-50%);
     width: 2px;
     height: 24px;
-    background-color: var(--accent-color);
+    background-color: var(--accent-color-secondary);
     border-radius: 0 2px 2px 0;
 }
 
@@ -351,8 +374,8 @@ body {
     top: 0;
     left: 0;
     right: 0;
-    height: 2px;
-    background-color: var(--accent-color);
+    height: 1px;
+    background-color: var(--accent-color-secondary);
 }
 
 .tab span {
@@ -630,8 +653,8 @@ button.primary:hover {
     bottom: 0;
     left: 0;
     right: 0;
-    height: 2px;
-    background-color: var(--accent-color);
+    height: 1px;
+    background-color: var(--accent-color-secondary);
 }
 
 .terminal-title span {
@@ -710,11 +733,6 @@ button.primary:hover {
    =========================================== */
 ::selection {
     background-color: var(--accent-color-muted);
-}
-
-#editor-textarea::placeholder {
-    color: var(--text-muted);
-    opacity: 0.8;
 }
 
 /* ===========================================
@@ -891,3 +909,4 @@ pre {
 .markdown-body .md-output-console p{
     margin-bottom: 0;
 }
+
