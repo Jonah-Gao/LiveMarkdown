@@ -76,20 +76,24 @@ public class FileService(ILogger<FileService> logger)
         double TerminalHeight,
         double EditorPreviewRatio,
         ViewMode PreferredViewMode,
-        string WorkingDirectory,
         string[] OpenedFiles,
         bool ExplorerVisible = true,
         bool TerminalVisible = false,
         SidebarPanel? ActiveTopPanel = SidebarPanel.Explorer,
         SidebarPanel? ActiveBottomPanel = null
     );
-    
+
     /// <summary>
     /// JSON serializer options for workspace settings.
     /// </summary>
     private static readonly JsonSerializerOptions JsonSerializerOptions = new()
     {
         WriteIndented = true,
+        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+        Converters =
+        {
+            new JsonStringEnumConverter(JsonNamingPolicy.CamelCase)
+        }
     };
 
     /// <summary>
@@ -255,6 +259,31 @@ public class FileService(ILogger<FileService> logger)
     }
 
     /// <summary>
+    /// Create a directory at the specified path.
+    /// </summary>
+    /// <param name="dirPath"></param>
+    public void CreateDirectory(string dirPath)
+    {
+        if (string.IsNullOrWhiteSpace(dirPath))
+        {
+            logger.LogError("Invalid directory path: {DirPath}", LogFormatter.ToBrightRed(dirPath));
+            return;
+        }
+
+        // Normalize and validate path
+        var fullPath = Path.GetFullPath(dirPath);
+        try
+        {
+            Directory.CreateDirectory(fullPath);
+            logger.LogInformation("Directory created: {DirPath}", LogFormatter.ToGreen(fullPath));
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Error creating directory: {DirPath}", LogFormatter.ToBrightRed(fullPath));
+        }
+    }
+
+    /// <summary>
     /// Save file content from a stream to disk.
     /// Uses atomic write with temporary file for data safety.
     /// </summary>
@@ -314,15 +343,14 @@ public class FileService(ILogger<FileService> logger)
     /// </summary>
     public async Task SaveWorkspaceSettingsAsync(string cwd, PanelLayout layout, CancellationToken ct = default)
     {
-        var dirPath = layout.WorkingDirectory;
-        if (string.IsNullOrWhiteSpace(dirPath))
+        if (string.IsNullOrWhiteSpace(cwd))
         {
-            logger.LogError("Invalid layout path: {LayoutPath}", LogFormatter.ToBrightRed(dirPath));
+            logger.LogError("Invalid layout path: {LayoutPath}", LogFormatter.ToBrightRed(cwd));
             return;
         }
 
         // Normalise and validate path
-        var fullPath = Path.GetFullPath(dirPath);
+        var fullPath = Path.GetFullPath(cwd);
         var settingsDir = Path.Combine(fullPath, ".LiveMarkdown");
         var settingsFile = Path.Combine(settingsDir, "settings.json");
         logger.LogInformation("Saving settings file: {SettingsFilePath}", LogFormatter.ToGreen(settingsFile));
@@ -387,7 +415,9 @@ public class FileService(ILogger<FileService> logger)
         try
         {
             await using var stream = File.OpenRead(settingsFile);
-            var layout = await JsonSerializer.DeserializeAsync<PanelLayout>(stream, cancellationToken: ct);
+            var layout =
+                await JsonSerializer.DeserializeAsync<PanelLayout>(stream, options: JsonSerializerOptions,
+                    cancellationToken: ct);
             logger.LogInformation("Layout loaded: {LayoutPath}", LogFormatter.ToGreen(settingsFile));
             return layout;
         }

@@ -1,5 +1,5 @@
 ﻿<script setup lang="ts">
-import {kernelConnection} from "@/services/kernelSignalr.ts";
+import {kernelConnection, executePythonCodeAsync, pythonInputAsync} from "@/services/kernelService.ts";
 import {onMounted, onUnmounted, ref, nextTick, watch} from "vue";
 import {Terminal} from "@xterm/xterm";
 import {FitAddon} from "@xterm/addon-fit";
@@ -8,11 +8,13 @@ import {theme} from "@/styles/GithubTerminalTheme.ts";
 import hljs from 'highlight.js'
 import 'highlight.js/styles/github-dark.css'
 import {v4 as uuidv4} from "uuid";
+import {useWorkspaceStore} from "@/stores/workspace.ts";
 
 const props = defineProps<{ code: string, lang: string }>();
 const mdTerminal = ref<HTMLDivElement | null>(null);
 const terminal = ref<HTMLDivElement | null>(null); // Renamed to avoid confusion
 const codeEl = ref<HTMLElement | null>(null)
+const workspace = useWorkspaceStore()
 
 const terminalId: string = uuidv4();
 let xterm: Terminal | null = null;
@@ -114,9 +116,8 @@ function initializeTerminal() {
 
     // Initial fit might be invalid (because parent container might be hidden), but do it anyway
     fitAddon.fit();
-    xterm.onData(data => {
-        console.log('Input:', JSON.stringify(data));
-        kernelConnection.invoke('PythonInput', terminalId, data);
+    xterm.onData(async data => {
+        await pythonInputAsync(terminalId, data);
     })
 }
 
@@ -128,21 +129,9 @@ async function executeCodeBlock() {
         fitAddon?.fit();
     }
 
-    try {
-        console.log("Invoking ExecuteCodeAsync...");
-        // It's recommended to let the backend handle the path, don't pass absolute paths from the frontend, it's unsafe and inflexible
-        // TODO: Remove hardcoded paths. These should be configured on the server side or passed via configuration.
-        await kernelConnection.invoke(
-            'ExecuteCodeAsync',
-            terminalId,
-            props.code,
-            "C:\\Users\\OOOOMGOSH\\AppData\\Local\\Programs\\Python\\Python312\\python.exe",
-            "E:\\CS_NEA_Project\\test\\.venv"
-        );
-    } catch (err) {
-        console.error('Error invoking code:', err);
-        xterm?.writeln(`\r\n[Error] ${err}`);
-    }
+    const venvPath = window.nodePath.join(workspace.rootDirectory, '.venv');
+
+    await executePythonCodeAsync(terminalId, props.code, workspace.pythonInterpreterPath, venvPath)
 }
 
 function copyCodeBlock() {

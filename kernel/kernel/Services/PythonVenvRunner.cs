@@ -25,7 +25,7 @@ public class PythonVenvRunner(ILogger<PythonVenvRunner> logger, IHubContext<Pyth
     /// Ensure a virtual environment exists at the specified path.
     /// Creates one if it doesn't exist.
     /// </summary>
-    private async Task EnsureVenvExistsAsync(string venvPath, string systemPythonPath)
+    public async Task CreateVenvAsync(string venvPath, string systemPythonPath)
     {
         // Check if venv already exists
         if (Directory.Exists(venvPath) && File.Exists(Path.Combine(venvPath, "pyvenv.cfg")))
@@ -74,7 +74,7 @@ public class PythonVenvRunner(ILogger<PythonVenvRunner> logger, IHubContext<Pyth
     {
         KillTerminal(terminalId);
 
-        await EnsureVenvExistsAsync(venvPath, systemPythonPath);
+        await CreateVenvAsync(venvPath, systemPythonPath);
         var venvPythonExe = GetVenvPythonExecutable(venvPath);
 
         // Create temporary script file

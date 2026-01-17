@@ -10,6 +10,16 @@ namespace kernel.Hubs;
 /// </summary>
 public class PythonHub(PythonVenvRunner pythonService, ILogger<PythonHub> logger) : Hub
 {
+    public async Task CreateVenvAsync(string venvPath, string systemPythonPath)
+    {
+        logger.LogInformation(
+            "Creating Python virtual environment\n\tVenv Path: {VenvPath}",
+            LogFormatter.ToCyan(venvPath)
+        );
+
+        await pythonService.CreateVenvAsync(venvPath, systemPythonPath);
+    }
+
     /// <summary>
     /// Execute Python code in a virtual environment.
     /// </summary>

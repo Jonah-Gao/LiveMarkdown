@@ -1,13 +1,16 @@
 ﻿<script setup lang="ts">
-import {onMounted, ref, watch} from 'vue'
+import {onMounted, onUnmounted, ref, watch} from 'vue'
 import {storeToRefs} from 'pinia'
 import {Terminal as XTerminal} from '@xterm/xterm'
 import {FitAddon} from '@xterm/addon-fit'
 import '@xterm/xterm/css/xterm.css'
-import * as signalR from '@microsoft/signalr'
 import {useWorkspaceStore} from '@/stores/workspace'
-import {terminalConnection, ensureTerminalConnection} from '@/services/terminalSignalr'
-import {kernelConnection} from '@/services/kernelSignalr'
+import {
+    initializeTerminal,
+    ensureTerminalConnection,
+    terminalInputAsync,
+    terminalConnection
+} from '@/services/terminalService.ts'
 import {theme} from '@/styles/GithubTerminalTheme'
 
 const workspace = useWorkspaceStore()
@@ -50,7 +53,7 @@ function handleResize(): void {
 /**
  * Initialize xterm terminal and connect to backend.
  */
-async function initializeTerminal(): Promise<void> {
+async function initializeXterm(): Promise<void> {
     await ensureTerminalConnection()
     xterm = new XTerminal(TERMINAL_CONFIG)
     fitAddon = new FitAddon()
@@ -61,18 +64,9 @@ async function initializeTerminal(): Promise<void> {
         fitAddon.fit()
     }
 
-    xterm.onData(data => {
-        terminalConnection.invoke('TerminalInput', data)
+    xterm.onData(async data => {
+        await terminalInputAsync(data)
     })
-}
-
-/**
- * Ensure kernel connection is established.
- */
-async function ensureKernelConnected(): Promise<void> {
-    if (kernelConnection.state === signalR.HubConnectionState.Disconnected) {
-        await kernelConnection.start()
-    }
 }
 
 // Watch: fit terminal when shown
@@ -88,16 +82,17 @@ watch(() => layoutState.value.terminalHeight, () => {
 })
 
 onMounted(async () => {
-    await initializeTerminal()
-    await ensureKernelConnected()
-    try {
-        await terminalConnection.invoke('TerminalInit', workspace.rootDirectory)
-    } catch (err) {
-        console.error('Terminal initialization failed:', err)
-    }
-    terminalConnection.off('TerminalOutput', handleTerminalOutput)
+    await initializeXterm()
+    await initializeTerminal(workspace.rootDirectory)
     terminalConnection.on('TerminalOutput', handleTerminalOutput)
     window.addEventListener('resize', handleResize)
+})
+
+onUnmounted(async () => {
+    terminalConnection.off('TerminalOutput', handleTerminalOutput)
+    window.removeEventListener('resize', handleResize)
+    xterm?.dispose()
+    xterm = null
 })
 </script>
 

@@ -13,7 +13,7 @@ const workspace = useWorkspaceStore()
 const {
     explorerStyle,
     showExplorer,
-    showTerminalArea,
+    showTerminal,
     showCodePane,
     showPreviewPane,
     activeTab,
@@ -52,13 +52,13 @@ function isBottomButtonActive(index: number): boolean {
 }
 
 onMounted(async () => {
-    // Initialise workspace with last working directory
+    // Initialize workspace with last working directory
     workspace.rootDirectory = await window.cwd.getCwd()
-    await workspace.initializeWorkspace()
     await workspace.loadWorkspaceSettings()
 
     // Set up window close handler
     window.windowControls.onBeforeClose(() => {
+        console.log("Window is closing, saving state...");
         workspace.saveDirtyTabs()
         workspace.saveWorkspaceSettings()
         window.cwd.setCwd(workspace.rootDirectory)
@@ -135,12 +135,12 @@ onMounted(async () => {
                 </div>
 
                 <div
-                    v-if="hasWorkspace && showTerminalArea"
+                    v-if="hasWorkspace && showTerminal"
                     class="horizontal-resizer"
                     @mousedown="workspace.startTerminalResize"
                 ></div>
                 <template v-if="hasWorkspace">
-                    <Terminal v-show="showTerminalArea"/>
+                    <Terminal v-show="showTerminal"/>
                 </template>
             </div>
         </div>

@@ -8,7 +8,6 @@ import {FileNode, PanelLayout, TabChunk} from '@/types/workspace'
 export const fileServiceConnection = new signalR.HubConnectionBuilder()
     .withUrl(SIGNALR_CONFIG.fileHub)
     .withAutomaticReconnect()
-    .withHubProtocol(new signalR.JsonHubProtocol())
     .build()
 
 /**
@@ -75,4 +74,9 @@ export async function saveWorkspaceSettingsAsync(cwd: string, layout: PanelLayou
 export async function loadLayoutAsync(dirPath: string): Promise<PanelLayout | null> {
     await ensureFileServiceConnection()
     return await fileServiceConnection.invoke<PanelLayout | null>("LoadWorkspaceSettingsAsync", dirPath)
+}
+
+export async function createDirectory(dirPath: string): Promise<void> {
+    await ensureFileServiceConnection()
+    await fileServiceConnection.invoke("CreateDirectory", dirPath)
 }

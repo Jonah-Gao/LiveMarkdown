@@ -1,6 +1,5 @@
 /// <reference types="vite-plugin-electron/electron-env" />
 
-import {FileNode} from "../src/vite-env";
 
 declare namespace NodeJS {
     interface ProcessEnv {

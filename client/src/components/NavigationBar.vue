@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import {onBeforeUnmount, onMounted, ref} from 'vue'
 import {useWorkspaceStore} from '@/stores/workspace'
+import {createDirectory} from "@/services/fileService.ts";
+import {createPythonVenvAsync} from "@/services/kernelService.ts";
 
 const workspace = useWorkspaceStore()
 
@@ -53,9 +55,14 @@ async function confirmOpen() {
 }
 
 async function confirmCreate() {
-    const directoryPath = newDirPath.value.trim()
+    const dirPath = newDirPath.value.trim()
+    const projectName = newProjectName.value.trim()
+    const directoryPath = window.nodePath.join(dirPath, projectName)
+    const venvPath = window.nodePath.join(directoryPath, '.venv')
     if (!directoryPath) return
     try {
+        await createDirectory(directoryPath)
+        await createPythonVenvAsync(venvPath, pythonInterpreter.value.trim())
         await workspace.createNewWorkspace({
             projectName: newProjectName.value.trim(),
             directoryPath,

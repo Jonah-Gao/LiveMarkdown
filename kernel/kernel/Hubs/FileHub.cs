@@ -28,6 +28,16 @@ public class FileHub(FileService fileService, ILogger<FileHub> logger) : Hub
         logger.LogInformation("Creating tab for file: {FilePath}", LogFormatter.ToGreen(filePath));
         return fileService.StreamTabAsync(filePath);
     }
+    
+    /// <summary>
+    /// Create a new directory.
+    /// </summary>
+    /// <param name="dirPath"></param>
+    public void CreateDirectory(string dirPath)
+    {
+        logger.LogInformation("Creating directory: {DirPath}", LogFormatter.ToGreen(dirPath));
+        fileService.CreateDirectory(dirPath);
+    }
 
     /// <summary>
     /// Save file content from a stream.

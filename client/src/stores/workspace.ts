@@ -1,7 +1,13 @@
 ﻿import {computed, reactive, ref, watch} from 'vue'
 import {defineStore} from 'pinia'
 import {MarkdownParser} from '@markdown/markdown'
-import {readDirectory, streamTab, saveTabAsync, saveWorkspaceSettingsAsync, loadLayoutAsync} from '@/services/fileService'
+import {
+    readDirectory,
+    streamTab,
+    saveTabAsync,
+    saveWorkspaceSettingsAsync,
+    loadLayoutAsync
+} from '@/services/fileService'
 import {FileNode, PanelLayout, SidebarPanel, Tab, UIFileNode, ViewMode} from '@/types/workspace'
 
 const md = new MarkdownParser()
@@ -158,7 +164,6 @@ export const useWorkspaceStore = defineStore('workspace', () => {
         layoutState.activeBottomPanel === 'terminal' &&
         layoutState.terminalVisible
     )
-    const showTerminalArea = computed(() => showTerminal.value)
 
     // Computed: editor/preview pane visibility
     const showPreviewPane = computed(() =>
@@ -381,7 +386,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
      * Start resizing the terminal panel.
      */
     function startTerminalResize(event: MouseEvent): void {
-        if (!showTerminalArea.value) return
+        if (!showTerminal.value) return
         resizeState.type = 'terminal'
         resizeState.startY = event.clientY
         resizeState.startSize = layoutState.terminalHeight
@@ -512,7 +517,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
         nodes.clear()
         if (!rootDirectory.value) return
 
-        const nodePath = (window as any).nodePath
+        const nodePath = window.nodePath
         const rootName = nodePath?.basename
             ? nodePath.basename(rootDirectory.value)
             : rootDirectory.value
@@ -556,14 +561,6 @@ export const useWorkspaceStore = defineStore('workspace', () => {
         } catch (err) {
             console.error('Error opening file:', err)
         }
-    }
-
-    /**
-     * Initialise the workspace by loading the file tree.
-     */
-    async function initializeWorkspace(): Promise<void> {
-        if (!rootDirectory.value) return
-        await loadFileTree()
     }
 
     /**
@@ -671,7 +668,6 @@ export const useWorkspaceStore = defineStore('workspace', () => {
         isMarkdownTab,
         showExplorer,
         showTerminal,
-        showTerminalArea,
         showPreviewPane,
         showCodePane,
         explorerStyle,
@@ -695,7 +691,6 @@ export const useWorkspaceStore = defineStore('workspace', () => {
         loadFileTree,
         toggleFolder,
         openFile,
-        initializeWorkspace,
         saveDirtyTabs,
         applyViewModeForActiveTab,
         resetTabs,
