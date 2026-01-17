@@ -29,19 +29,28 @@ const TERMINAL_CONFIG = {
     convertEol: true,
 }
 
-function handleTerminalOutput(output: string) {
+/**
+ * Handle terminal output from SignalR.
+ */
+function handleTerminalOutput(output: string): void {
     if (xterm) {
         xterm.write(output)
     }
 }
 
-function handleResize() {
+/**
+ * Resize terminal to fit container.
+ */
+function handleResize(): void {
     if (fitAddon) {
         fitAddon.fit()
     }
 }
 
-async function initializeTerminal() {
+/**
+ * Initialize xterm terminal and connect to backend.
+ */
+async function initializeTerminal(): Promise<void> {
     await ensureTerminalConnection()
     xterm = new XTerminal(TERMINAL_CONFIG)
     fitAddon = new FitAddon()
@@ -53,23 +62,28 @@ async function initializeTerminal() {
     }
 
     xterm.onData(data => {
-        terminalConnection.invoke('TerminalInput', data);
+        terminalConnection.invoke('TerminalInput', data)
     })
 }
 
-async function ensureKernelConnected() {
+/**
+ * Ensure kernel connection is established.
+ */
+async function ensureKernelConnected(): Promise<void> {
     if (kernelConnection.state === signalR.HubConnectionState.Disconnected) {
-        await kernelConnection.start();
+        await kernelConnection.start()
     }
 }
 
+// Watch: fit terminal when shown
 watch(showTerminal, (newVal) => {
     if (newVal && fitAddon) {
         setTimeout(() => fitAddon!.fit(), 100)
     }
 })
 
-watch(() => layoutState.value.TerminalHeight, () => {
+// Watch: resize terminal when height changes
+watch(() => layoutState.value.terminalHeight, () => {
     setTimeout(handleResize, 50)
 })
 
@@ -85,13 +99,6 @@ onMounted(async () => {
     terminalConnection.on('TerminalOutput', handleTerminalOutput)
     window.addEventListener('resize', handleResize)
 })
-
-// onBeforeUnmount(() => {
-//     window.removeEventListener('resize', handleResize)
-//     terminalConnection.off('TerminalOutput', handleTerminalOutput)
-//     xterm?.dispose()
-//     terminalConnection.stop().catch(err => console.error('Error closing terminal connection:', err))
-// })
 </script>
 
 <template>

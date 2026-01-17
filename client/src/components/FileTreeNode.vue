@@ -1,7 +1,5 @@
 ﻿<script setup lang="ts">
-import {defineProps} from 'vue'
-import {UIFileNode} from "@/types/workspace.ts";
-
+import {UIFileNode} from "@/types/workspace"
 
 interface Props {
     node: UIFileNode
@@ -9,9 +7,8 @@ interface Props {
 
 defineProps<Props>()
 
-type IconKey = keyof typeof icons;
-
-const icons = {
+// Icon mappings for file types
+const ICONS = {
     folder: 'folder',
     file: 'code',
     json: 'data_object',
@@ -24,32 +21,47 @@ const icons = {
     arrowRight: 'keyboard_arrow_right',
 } as const
 
-const categoryMap: Partial<Record<IconKey, string[]>> = {
+type IconKey = keyof typeof ICONS
+
+// Extension to icon category mapping
+const CATEGORY_MAP: Partial<Record<IconKey, string[]>> = {
     image: ['.png', '.jpg', '.jpeg', '.gif', '.svg', '.bmp', '.webp'],
     json: ['.json'],
-    javascript: ['.js', '.jsx', '.mjs', '.cjs', '.ts', '.tsx'], // Added ts
+    javascript: ['.js', '.jsx', '.mjs', '.cjs', '.ts', '.tsx'],
     markdown: ['.md', '.mdx'],
     csv: ['.csv'],
     database: ['.db', '.sqlite', '.sqlite3', '.sql'],
-};
+}
 
-const extensionIndex = new Map<string, IconKey>();
-
-Object.entries(categoryMap).forEach(([category, extensions]) => {
-    extensions.forEach(ext => extensionIndex.set(ext, category as keyof typeof icons));
-});
+// Build extension index for fast lookup
+const extensionIndex = new Map<string, IconKey>()
+for (const [category, extensions] of Object.entries(CATEGORY_MAP)) {
+    for (const ext of extensions) {
+        extensionIndex.set(ext, category as IconKey)
+    }
+}
 
 const emit = defineEmits<{
     toggleFolder: [node: UIFileNode]
     openFile: [node: UIFileNode]
 }>()
 
-function handleClick(node: UIFileNode) {
+/**
+ * Handle node click - toggle folder or open file.
+ */
+function handleClick(node: UIFileNode): void {
     if (node.isDirectory) {
         emit('toggleFolder', node)
     } else {
         emit('openFile', node)
     }
+}
+
+/**
+ * Get the icon name for a file based on its extension.
+ */
+function getFileIcon(extension: string): string {
+    return ICONS[extensionIndex.get(extension) ?? 'file']
 }
 </script>
 
@@ -63,19 +75,19 @@ function handleClick(node: UIFileNode) {
                 v-if="node.isDirectory"
                 class="material-symbols-outlined folder-arrow"
             >
-                {{ node.expanded ? icons.arrowDown : icons.arrowRight }}
+                {{ node.expanded ? ICONS.arrowDown : ICONS.arrowRight }}
             </span>
             <span
                 v-if="node.isDirectory"
                 class="material-symbols-outlined folder-icon"
             >
-                {{ icons.folder }}
+                {{ ICONS.folder }}
             </span>
             <span
                 v-else
                 class="material-symbols-outlined file-icon"
             >
-                {{ icons[extensionIndex.get(node.extension) ?? 'file' as keyof typeof icons] }}
+                {{ getFileIcon(node.extension) }}
             </span>
             <span class="file-name">{{ node.name }}</span>
         </div>

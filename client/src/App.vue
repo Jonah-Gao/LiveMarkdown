@@ -1,15 +1,5 @@
-<!--<script setup>-->
-<!--import Editor from "./components/Editor.vue";-->
-<!--</script>-->
-
-<!--<template>-->
-<!--    <Editor />-->
-<!--</template>-->
-
-<!--<style scoped>-->
-<!--</style>-->
 <script setup lang="ts">
-import {onBeforeUnmount, onMounted, ref} from 'vue'
+import {onMounted, ref} from 'vue'
 import {storeToRefs} from 'pinia'
 import FileExplorer from './components/FileExplorer.vue'
 import TabsBar from './components/TabsBar.vue'
@@ -17,7 +7,7 @@ import Editor from './components/Editor.vue'
 import Preview from './components/Preview.vue'
 import Terminal from './components/Terminal.vue'
 import {useWorkspaceStore} from '@/stores/workspace'
-import NavigationBar from "@/components/NavigationBar.vue";
+import NavigationBar from "@/components/NavigationBar.vue"
 
 const workspace = useWorkspaceStore()
 const {
@@ -29,6 +19,7 @@ const {
     activeTab,
     hasTabs,
     hasWorkspace,
+    layoutState
 } = storeToRefs(workspace)
 
 const sidebarButtons = workspace.sidebarButtons
@@ -36,23 +27,44 @@ const viewModeButtons = workspace.viewModeButtons
 
 const editorPane = ref<HTMLElement | null>(null)
 
-function startPreviewResize(event: MouseEvent) {
+/**
+ * Start preview pane resize, passing container width to store.
+ */
+function startPreviewResize(event: MouseEvent): void {
     const width = editorPane.value?.getBoundingClientRect().width || 0
     workspace.startPreviewResize(event, width)
 }
 
+/**
+ * Check if a sidebar button is active based on layoutState.
+ */
+function isTopButtonActive(index: number): boolean {
+    const panel = sidebarButtons.top[index]?.panel
+    return layoutState.value.activeTopPanel === panel
+}
+
+/**
+ * Check if a bottom sidebar button is active based on layoutState.
+ */
+function isBottomButtonActive(index: number): boolean {
+    const panel = sidebarButtons.bottom[index]?.panel
+    return layoutState.value.activeBottomPanel === panel
+}
+
 onMounted(async () => {
-    workspace.rootDirectory = await window.cwd.getCwd();
+    // Initialise workspace with last working directory
+    workspace.rootDirectory = await window.cwd.getCwd()
     await workspace.initializeWorkspace()
     await workspace.loadWorkspaceSettings()
+
+    // Set up window close handler
     window.windowControls.onBeforeClose(() => {
         workspace.saveDirtyTabs()
         workspace.saveWorkspaceSettings()
-        window.cwd.setCwd(workspace.rootDirectory);
-        window.windowControls.canClose();
+        window.cwd.setCwd(workspace.rootDirectory)
+        window.windowControls.canClose()
     })
 })
-
 </script>
 
 <template>
@@ -65,7 +77,7 @@ onMounted(async () => {
                         v-for="(item, index) in sidebarButtons.top"
                         :key="index"
                         class="badge"
-                        :class="{ active: workspace.activeIndexTop === index }"
+                        :class="{ active: isTopButtonActive(index) }"
                         @click="workspace.handleTopButtonClick(index)"
                     >
                         <span class="material-symbols-outlined">{{ item.icon }}</span>
@@ -77,7 +89,7 @@ onMounted(async () => {
                         v-for="(item, index) in sidebarButtons.bottom"
                         :key="index"
                         class="badge"
-                        :class="{ active: workspace.activeIndexBottom === index }"
+                        :class="{ active: isBottomButtonActive(index) }"
                         @click="workspace.handleBottomButtonClick(index)"
                     >
                         <span class="material-symbols-outlined">{{ item.icon }}</span>

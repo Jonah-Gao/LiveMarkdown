@@ -2,14 +2,14 @@ using kernel.Hubs;
 using kernel.Services;
 using kernel.Utils;
 
-// Program.cs: application bootstrap
-// - Configure minimal web app, CORS and SignalR hubs
-// - Improve console logging format so logs include timestamps, levels and scopes
-// - Add a few startup log lines to make it easier to diagnose service startup
+// Application entry point and configuration.
+// - Configures minimal web app, CORS and SignalR hubs
+// - Sets up console logging with timestamps and colours
+// - Maps SignalR hub endpoints
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Replace default providers with a simple console logger that includes timestamps
+// Configure console logging with timestamps and colors
 builder.Logging.ClearProviders();
 builder.Logging.AddSimpleConsole(options =>
 {
@@ -21,7 +21,7 @@ builder.Logging.AddSimpleConsole(options =>
 
 builder.Logging.SetMinimumLevel(LogLevel.Information);
 
-// CORS: allow the frontend development origin for local dev (adjust for production)
+// Configure CORS for frontend development
 builder.Services.AddCors(options =>
 {
     options.AddDefaultPolicy(policy =>
@@ -33,7 +33,7 @@ builder.Services.AddCors(options =>
     });
 });
 
-// Register services and SignalR
+// Register services
 builder.Services.AddSingleton<TerminalService>();
 builder.Services.AddSingleton<PythonVenvRunner>();
 builder.Services.AddSingleton<FileService>();
@@ -41,14 +41,14 @@ builder.Services.AddSignalR().AddJsonProtocol();
 
 var app = builder.Build();
 
-// Log some helpful startup information
+// Log startup information
 app.Logger.LogInformation("Starting kernel service (PID: {Pid})", LogFormatter.ToYellow(Environment.ProcessId));
 app.Logger.LogInformation("Environment: {Env}", LogFormatter.ToGreen(builder.Environment.EnvironmentName));
 
 app.UseCors();
 app.UseRouting();
 
-// Map SignalR hubs - log each mapping for easier debugging
+// Map SignalR hubs
 app.MapHub<PythonHub>("/kernelHub");
 app.Logger.LogInformation("Mapped hub: {Path} -> {Hub}", LogFormatter.ToMagenta("/kernelHub"), LogFormatter.ToCyan("PythonHub"));
 app.MapHub<TerminalHub>("/terminalHub");
@@ -56,7 +56,7 @@ app.Logger.LogInformation("Mapped hub: {Path} -> {Hub}", LogFormatter.ToMagenta(
 app.MapHub<FileHub>("/fileHub");
 app.Logger.LogInformation("Mapped hub: {Path} -> {Hub}", LogFormatter.ToMagenta("/fileHub"), LogFormatter.ToCyan("FileHub"));
 
-// Final run with a top-level try to ensure we log unhandled shutdowns
+// Run application with error handling
 try
 {
     app.Run();

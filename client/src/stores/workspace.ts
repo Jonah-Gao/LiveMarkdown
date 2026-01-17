@@ -2,10 +2,11 @@
 import {defineStore} from 'pinia'
 import {MarkdownParser} from '@markdown/markdown'
 import {readDirectory, streamTab, saveTabAsync, saveWorkspaceSettingsAsync, loadLayoutAsync} from '@/services/fileService'
-import {FileNode, PanelLayout, Tab, UIFileNode, ViewMode} from '@/types/workspace'
+import {FileNode, PanelLayout, SidebarPanel, Tab, UIFileNode, ViewMode} from '@/types/workspace'
 
 const md = new MarkdownParser()
 
+// Layout constraints
 const DEFAULT_ROOT_DIRECTORY = ''
 const MIN_EXPLORER_WIDTH = 160
 const MAX_EXPLORER_WIDTH = 520
@@ -14,6 +15,7 @@ const MAX_TERMINAL_HEIGHT = 900
 const MIN_PREVIEW_RATIO = 0.15
 const MAX_PREVIEW_RATIO = 0.85
 
+// Language detection by file extension
 const LANGUAGE_BY_EXTENSION: Record<string, string> = {
     '.ts': 'Typescript',
     '.tsx': 'Typescript',
@@ -42,39 +44,55 @@ const LANGUAGE_BY_EXTENSION: Record<string, string> = {
     'txt': 'Plaintext'
 }
 
+// Sidebar button configuration
 const SIDEBAR_BUTTONS = {
     top: [
-        {icon: 'folder', panel: 'explorer'},
-        {icon: 'search', panel: 'search'},
+        {icon: 'folder', panel: 'explorer' as SidebarPanel},
+        {icon: 'search', panel: 'search' as SidebarPanel},
     ],
     bottom: [
-        {icon: 'play_arrow', panel: 'run'},
-        {icon: 'terminal', panel: 'terminal'}
+        {icon: 'play_arrow', panel: 'run' as SidebarPanel},
+        {icon: 'terminal', panel: 'terminal' as SidebarPanel}
     ]
 }
 
+// View mode button configuration
 const VIEW_MODE_BUTTONS: { value: ViewMode, icon: string, label: string }[] = [
     {value: 'code', icon: 'code', label: 'Code only'},
     {value: 'split', icon: 'split_scene', label: 'Code & Preview'},
     {value: 'preview', icon: 'visibility', label: 'Preview only'}
 ]
 
-export const useWorkspaceStore = defineStore('workspace', () => {
-    const activeIndexTop = ref<number | null>(0)
-    const activeIndexBottom = ref<number | null>(null)
-    const explorerVisible = ref(true)
+// Default layout state values
+const DEFAULT_LAYOUT_STATE: PanelLayout = {
+    explorerWidth: 240,
+    terminalHeight: 250,
+    editorPreviewRatio: 0.5,
+    preferredViewMode: 'split',
+    explorerVisible: true,
+    terminalVisible: false,
+    activeTopPanel: 'explorer',
+    activeBottomPanel: null,
+    openedFiles: []
+}
 
-    const code = ref()
+export const useWorkspaceStore = defineStore('workspace', () => {
+    // Editor state
+    const code = ref('')
     const tabs = ref<Tab[]>([])
     const activeTabIndex = ref(-1)
     const currentViewMode = ref<ViewMode>('split')
 
-
+    // File tree state
     const fileTree = ref<UIFileNode[]>([])
     const nodes = reactive(new Map<string, FileNode>())
+
+    // Workspace state
     const rootDirectory = ref(DEFAULT_ROOT_DIRECTORY)
     const projectName = ref('')
     const pythonInterpreterPath = ref('')
+
+    // Resize interaction state (not persisted)
     const resizeState = reactive({
         type: null as 'explorer' | 'preview' | 'terminal' | null,
         startX: 0,
@@ -83,17 +101,14 @@ export const useWorkspaceStore = defineStore('workspace', () => {
         containerWidth: 0
     })
 
-    const layoutState = reactive<PanelLayout>({
-        explorerWidth: 240,
-        terminalHeight: 250,
-        editorPreviewRatio: 0.5,
-        preferredViewMode: 'split',
-        openedFiles: tabs.value.map(t => t.path)
-    })
+    // Unified layout state - all UI panel states in one place
+    const layoutState = reactive<PanelLayout>({...DEFAULT_LAYOUT_STATE})
 
+    // Computed: workspace state
     const hasWorkspace = computed(() => !!rootDirectory.value)
     const hasTabs = computed(() => tabs.value.length > 0)
 
+    // Computed: build visible file tree from flat node map
     const visibleFileTree = computed<UIFileNode[]>(() => {
         if (!rootDirectory.value) {
             return []
@@ -121,29 +136,51 @@ export const useWorkspaceStore = defineStore('workspace', () => {
         return root ? [root] : []
     })
 
+    // Computed: Markdown rendering
     const renderedVNode = computed(() => md.render(code.value))
+
+    // Computed: active tab and file type detection
     const activeTab = computed(() => tabs.value[activeTabIndex.value] ?? null)
     const isMarkdownTab = computed(() => {
         const name = activeTab.value?.name?.toLowerCase() || ''
         const path = activeTab.value?.path?.toLowerCase() || ''
         return name.endsWith('.md') || path.endsWith('.md')
     })
-    const showExplorer = computed(() => hasWorkspace.value && activeIndexTop.value === 0 && explorerVisible.value)
-    const showTerminal = computed(() => hasWorkspace.value && activeIndexBottom.value === 1)
+
+    // Computed: panel visibility derived from layoutState
+    const showExplorer = computed(() =>
+        hasWorkspace.value &&
+        layoutState.activeTopPanel === 'explorer' &&
+        layoutState.explorerVisible
+    )
+    const showTerminal = computed(() =>
+        hasWorkspace.value &&
+        layoutState.activeBottomPanel === 'terminal' &&
+        layoutState.terminalVisible
+    )
     const showTerminalArea = computed(() => showTerminal.value)
-    const showPreviewPane = computed(() => hasTabs.value && isMarkdownTab.value && currentViewMode.value !== 'code')
-    const showCodePane = computed(() => hasTabs.value && (!isMarkdownTab.value || currentViewMode.value !== 'preview'))
+
+    // Computed: editor/preview pane visibility
+    const showPreviewPane = computed(() =>
+        hasTabs.value && isMarkdownTab.value && currentViewMode.value !== 'code'
+    )
+    const showCodePane = computed(() =>
+        hasTabs.value && (!isMarkdownTab.value || currentViewMode.value !== 'preview')
+    )
+
+    // Computed: panel styles
     const explorerStyle = computed(() => ({width: `${layoutState.explorerWidth}px`}))
     const terminalStyle = computed(() => ({height: `${layoutState.terminalHeight}px`}))
+
+    // Computed: language detection for status bar
     const currentLanguage = computed(() => {
         const name = (activeTab.value?.path || activeTab.value?.name || '').toLowerCase()
         const extIndex = name.lastIndexOf('.')
         const ext = extIndex >= 0 ? name.slice(extIndex) : ''
-        if (ext && LANGUAGE_BY_EXTENSION[ext]) {
-            return LANGUAGE_BY_EXTENSION[ext]
-        }
-        return ''
+        return (ext && LANGUAGE_BY_EXTENSION[ext]) || ''
     })
+
+    // Computed: editor/preview pane flex styles
     const editorPaneStyle = computed(() => {
         if (!showCodePane.value) {
             return {display: 'none'}
@@ -163,6 +200,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
         return {flex: 1 - layoutState.editorPreviewRatio, minWidth: 0}
     })
 
+    // Watch: sync code editor content with active tab
     watch(activeTab, (tab) => {
         if (!tab) {
             code.value = ''
@@ -173,6 +211,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
         applyViewModeForActiveTab()
     }, {immediate: true})
 
+    // Watch: mark tab as dirty when code changes
     watch(code, (newCode) => {
         const tab: Tab = activeTab.value
         if (!tab) return
@@ -183,43 +222,72 @@ export const useWorkspaceStore = defineStore('workspace', () => {
         }
     })
 
-    function clamp(value: number, min: number, max: number) {
+    /**
+     * Clamp a value between min and max bounds.
+     */
+    function clamp(value: number, min: number, max: number): number {
         return Math.min(Math.max(value, min), max)
     }
 
-    function handleTopButtonClick(index: number) {
-        if (activeIndexTop.value === index) {
-            if (index === 0) {
-                explorerVisible.value = !explorerVisible.value
+    /**
+     * Handle top sidebar button click.
+     * Toggles panel visibility when clicking the active panel.
+     */
+    function handleTopButtonClick(index: number): void {
+        const panel = SIDEBAR_BUTTONS.top[index]?.panel
+        if (!panel) return
+
+        if (layoutState.activeTopPanel === panel) {
+            // Toggle visibility for explorer panel
+            if (panel === 'explorer') {
+                layoutState.explorerVisible = !layoutState.explorerVisible
             } else {
-                activeIndexTop.value = null
+                layoutState.activeTopPanel = null
             }
         } else {
-            activeIndexTop.value = index
-            if (index === 0) {
-                explorerVisible.value = true
+            layoutState.activeTopPanel = panel
+            if (panel === 'explorer') {
+                layoutState.explorerVisible = true
             }
         }
     }
 
-    function handleBottomButtonClick(index: number) {
-        if (activeIndexBottom.value === index) {
-            activeIndexBottom.value = null
+    /**
+     * Handle bottom sidebar button click.
+     * Toggles panel visibility when clicking the active panel.
+     */
+    function handleBottomButtonClick(index: number): void {
+        const panel = SIDEBAR_BUTTONS.bottom[index]?.panel
+        if (!panel) return
+
+        if (layoutState.activeBottomPanel === panel) {
+            layoutState.activeBottomPanel = null
+            if (panel === 'terminal') {
+                layoutState.terminalVisible = false
+            }
         } else {
-            activeIndexBottom.value = index
+            layoutState.activeBottomPanel = panel
+            if (panel === 'terminal') {
+                layoutState.terminalVisible = true
+            }
         }
     }
 
-    function toggleExplorer() {
-        explorerVisible.value = !explorerVisible.value
-        if (!explorerVisible.value) {
-            activeIndexTop.value = null
+    /**
+     * Toggle explorer panel visibility.
+     */
+    function toggleExplorer(): void {
+        layoutState.explorerVisible = !layoutState.explorerVisible
+        if (!layoutState.explorerVisible) {
+            layoutState.activeTopPanel = null
         }
     }
 
-    function openTab(tab: Tab) {
+    /**
+     * Open a tab and set it as active.
+     */
+    function openTab(tab: Tab): void {
         const targetIndex = tabs.value.findIndex(t => t.id === tab.id)
-
         if (targetIndex === -1) return
 
         activeTabIndex.value = targetIndex
@@ -227,7 +295,10 @@ export const useWorkspaceStore = defineStore('workspace', () => {
         applyViewModeForActiveTab()
     }
 
-    async function closeTab(tab: Tab) {
+    /**
+     * Close a tab, saving if dirty.
+     */
+    async function closeTab(tab: Tab): Promise<void> {
         if (tab.isDirty) {
             await saveTabAsync(tab.path, tab.content)
             tab.isDirty = false
@@ -237,6 +308,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
         if (index !== -1) {
             tabs.value.splice(index, 1)
             layoutState.openedFiles = tabs.value.map(t => t.path)
+
             if (tabs.value.length === 0) {
                 activeTabIndex.value = -1
                 code.value = ''
@@ -252,14 +324,20 @@ export const useWorkspaceStore = defineStore('workspace', () => {
         }
     }
 
-    async function saveDirtyTabs() {
+    /**
+     * Save all tabs that have unsaved changes.
+     */
+    async function saveDirtyTabs(): Promise<void> {
         for (const tab of tabs.value.filter((t: Tab): boolean => t.isDirty)) {
             await saveTabAsync(tab.path, tab.content)
             tab.isDirty = false
         }
     }
 
-    function applyViewModeForActiveTab() {
+    /**
+     * Apply the appropriate view mode based on active tab type.
+     */
+    function applyViewModeForActiveTab(): void {
         if (!hasTabs.value) {
             currentViewMode.value = 'code'
             return
@@ -267,15 +345,19 @@ export const useWorkspaceStore = defineStore('workspace', () => {
         currentViewMode.value = isMarkdownTab.value ? layoutState.preferredViewMode : 'code'
     }
 
-    function setViewMode(mode: ViewMode) {
-        if (!isMarkdownTab.value) {
-            return
-        }
+    /**
+     * Set the view mode for Markdown files.
+     */
+    function setViewMode(mode: ViewMode): void {
+        if (!isMarkdownTab.value) return
         currentViewMode.value = mode
         layoutState.preferredViewMode = mode
     }
 
-    function startExplorerResize(event: MouseEvent) {
+    /**
+     * Start resizing the explorer panel.
+     */
+    function startExplorerResize(event: MouseEvent): void {
         if (!showExplorer.value) return
         resizeState.type = 'explorer'
         resizeState.startX = event.clientX
@@ -283,7 +365,10 @@ export const useWorkspaceStore = defineStore('workspace', () => {
         attachResizeListeners()
     }
 
-    function startPreviewResize(event: MouseEvent, containerWidth: number) {
+    /**
+     * Start resizing the preview panel.
+     */
+    function startPreviewResize(event: MouseEvent, containerWidth: number): void {
         if (!showPreviewPane.value || !showCodePane.value) return
         resizeState.type = 'preview'
         resizeState.startX = event.clientX
@@ -292,7 +377,10 @@ export const useWorkspaceStore = defineStore('workspace', () => {
         attachResizeListeners()
     }
 
-    function startTerminalResize(event: MouseEvent) {
+    /**
+     * Start resizing the terminal panel.
+     */
+    function startTerminalResize(event: MouseEvent): void {
         if (!showTerminalArea.value) return
         resizeState.type = 'terminal'
         resizeState.startY = event.clientY
@@ -300,13 +388,19 @@ export const useWorkspaceStore = defineStore('workspace', () => {
         attachResizeListeners()
     }
 
-    function attachResizeListeners() {
+    /**
+     * Attach global resize listeners.
+     */
+    function attachResizeListeners(): void {
         window.addEventListener('mousemove', handleResizeDrag)
         window.addEventListener('mouseup', stopResize)
         document.body.style.userSelect = 'none'
     }
 
-    function handleResizeDrag(event: MouseEvent) {
+    /**
+     * Handle resize drag event.
+     */
+    function handleResizeDrag(event: MouseEvent): void {
         if (resizeState.type === 'explorer') {
             const delta = event.clientX - resizeState.startX
             layoutState.explorerWidth = clamp(resizeState.startSize + delta, MIN_EXPLORER_WIDTH, MAX_EXPLORER_WIDTH)
@@ -323,7 +417,10 @@ export const useWorkspaceStore = defineStore('workspace', () => {
         }
     }
 
-    function stopResize() {
+    /**
+     * Stop resize operation and clean up listeners.
+     */
+    function stopResize(): void {
         if (!resizeState.type) return
         window.removeEventListener('mousemove', handleResizeDrag)
         window.removeEventListener('mouseup', stopResize)
@@ -331,6 +428,9 @@ export const useWorkspaceStore = defineStore('workspace', () => {
         resizeState.type = null
     }
 
+    /**
+     * Read directory contents recursively via streaming.
+     */
     async function readDirAsync(directoryPath: string, targetMap: Map<string, FileNode>): Promise<void> {
         const pendingChildren = new Map<string, string[]>();
         (await readDirectory(directoryPath))
@@ -366,7 +466,10 @@ export const useWorkspaceStore = defineStore('workspace', () => {
             })
     }
 
-    async function StreamTabAsync(filePath: string): Promise<void> {
+    /**
+     * Stream file content into a tab via streaming.
+     */
+    async function streamTabAsync(filePath: string): Promise<void> {
         (await streamTab(filePath))
             .subscribe({
                 next: (chunk) => {
@@ -394,6 +497,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
                     }
                 },
                 complete: () => {
+                    // Stream completed
                 },
                 error: (err) => {
                     console.error('Stream error:', err)
@@ -401,11 +505,13 @@ export const useWorkspaceStore = defineStore('workspace', () => {
             })
     }
 
-    async function loadFileTree() {
+    /**
+     * Load the file tree for the workspace root directory.
+     */
+    async function loadFileTree(): Promise<void> {
         nodes.clear()
-        if (!rootDirectory.value) {
-            return
-        }
+        if (!rootDirectory.value) return
+
         const nodePath = (window as any).nodePath
         const rootName = nodePath?.basename
             ? nodePath.basename(rootDirectory.value)
@@ -423,89 +529,121 @@ export const useWorkspaceStore = defineStore('workspace', () => {
         await readDirAsync(rootDirectory.value, nodes)
     }
 
-    async function toggleFolder(node: UIFileNode) {
-        nodes.get(node.path)!.expanded = !node.expanded
-        node.expanded = !node.expanded
+    /**
+     * Toggle folder expansion state.
+     */
+    function toggleFolder(node: UIFileNode): void {
+        const fileNode = nodes.get(node.path)
+        if (fileNode) {
+            fileNode.expanded = !node.expanded
+            node.expanded = !node.expanded
+        }
     }
 
-    async function openFile(node: UIFileNode) {
+    /**
+     * Open a file in a new or existing tab.
+     */
+    async function openFile(node: UIFileNode): Promise<void> {
         if (!rootDirectory.value || node.isDirectory) return
 
         try {
-            const existingTab = tabs.value.find(tab => tab.path === node.path);
+            const existingTab = tabs.value.find(tab => tab.path === node.path)
             if (existingTab) {
                 openTab(existingTab)
             } else {
-                await StreamTabAsync(node.path);
+                await streamTabAsync(node.path)
             }
         } catch (err) {
-            console.error('Error opening file:', err);
+            console.error('Error opening file:', err)
         }
     }
 
-    async function initializeWorkspace() {
-        if (!rootDirectory.value) {
-            return
-        }
+    /**
+     * Initialise the workspace by loading the file tree.
+     */
+    async function initializeWorkspace(): Promise<void> {
+        if (!rootDirectory.value) return
         await loadFileTree()
     }
 
-    function resetTabs() {
+    /**
+     * Reset all tabs to empty state.
+     */
+    function resetTabs(): void {
         tabs.value = []
         activeTabIndex.value = -1
         code.value = ''
         applyViewModeForActiveTab()
     }
 
-    async function setWorkspaceDirectory(directoryPath: string) {
+    /**
+     * Set the workspace root directory and load file tree.
+     */
+    async function setWorkspaceDirectory(directoryPath: string): Promise<void> {
         nodes.clear()
         fileTree.value = []
         rootDirectory.value = directoryPath.trim()
-        if (!rootDirectory.value) {
-            return
-        }
+        if (!rootDirectory.value) return
         await loadFileTree()
     }
 
-    async function openWorkspace(directoryPath: string) {
+    /**
+     * Open a workspace at the given directory.
+     */
+    async function openWorkspace(directoryPath: string): Promise<void> {
         resetTabs()
         await setWorkspaceDirectory(directoryPath)
     }
 
+    /**
+     * Create a new workspace with the given options.
+     */
     async function createNewWorkspace(options: {
         projectName: string,
         directoryPath: string,
         pythonInterpreter: string
-    }) {
+    }): Promise<void> {
         projectName.value = options.projectName
         pythonInterpreterPath.value = options.pythonInterpreter
         await openWorkspace(options.directoryPath)
     }
 
-    async function saveWorkspaceSettings() {
+    /**
+     * Save workspace settings to disk.
+     */
+    async function saveWorkspaceSettings(): Promise<void> {
         await saveWorkspaceSettingsAsync(rootDirectory.value, layoutState)
     }
 
-    async function loadWorkspaceSettings() {
+    /**
+     * Load workspace settings from disk and restore state.
+     */
+    async function loadWorkspaceSettings(): Promise<void> {
         const settings = await loadLayoutAsync(rootDirectory.value)
         if (settings) {
+            // Restore layout dimensions
             layoutState.explorerWidth = settings.explorerWidth
             layoutState.terminalHeight = settings.terminalHeight
             layoutState.editorPreviewRatio = settings.editorPreviewRatio
             layoutState.preferredViewMode = settings.preferredViewMode
+
+            // Restore panel visibility state
+            layoutState.explorerVisible = settings.explorerVisible ?? true
+            layoutState.terminalVisible = settings.terminalVisible ?? false
+            layoutState.activeTopPanel = settings.activeTopPanel ?? 'explorer'
+            layoutState.activeBottomPanel = settings.activeBottomPanel ?? null
+
+            // Restore opened files
             layoutState.openedFiles = settings.openedFiles
             await openWorkspace(rootDirectory.value)
             for (const filePath of layoutState.openedFiles) {
-                await StreamTabAsync(filePath)
+                await streamTabAsync(filePath)
             }
         }
     }
 
     return {
-        // state
-        activeIndexTop,
-        activeIndexBottom,
-        explorerVisible,
+        // State
         code,
         tabs,
         activeTabIndex,
@@ -517,12 +655,16 @@ export const useWorkspaceStore = defineStore('workspace', () => {
         projectName,
         pythonInterpreterPath,
         resizeState,
+
+        // Computed state
         hasWorkspace,
         hasTabs,
+
+        // Constants
         sidebarButtons: SIDEBAR_BUTTONS,
         viewModeButtons: VIEW_MODE_BUTTONS,
 
-        // getters
+        // Computed getters
         visibleFileTree,
         renderedVNode,
         activeTab,
@@ -538,7 +680,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
         editorPaneStyle,
         previewPaneStyle,
 
-        // actions
+        // Actions
         handleTopButtonClick,
         handleBottomButtonClick,
         toggleExplorer,
