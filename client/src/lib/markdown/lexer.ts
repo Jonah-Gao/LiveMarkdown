@@ -69,7 +69,7 @@ class Lexer {
 
 
     /**
-     * Tokenises the input string into an array of tokens.
+     * Tokenizes the input string into an array of tokens.
      * This is the main entry point for the Lexer.
      * @param input The raw Markdown string.
      * @returns An array of tokens.
@@ -637,7 +637,7 @@ class Lexer {
         let blankLineCount: number = 0;
         let firstItemMarkerWidth: number = initialMarkerWidth;
 
-        // Handle first line (marker already stripped by tokeniser)
+        // Handle first line (marker already stripped by tokenizer)
         const firstLineEnd: number = input.indexOf('\n', 0);
         const firstLineIdx: number = firstLineEnd === -1 ? input.length : firstLineEnd + 1;
         const line: string = input.slice(0, firstLineIdx);
@@ -759,7 +759,7 @@ class Lexer {
         let start: number | undefined = parseInt(initialMarker, 10);
         let firstItemMarkerWidth: number = initialMarkerWidth;
 
-        // Handle first line (marker already stripped by tokeniser)
+        // Handle first line (marker already stripped by tokenizer)
         const firstLineEnd: number = input.indexOf('\n', 0);
         const firstLineIdx: number = firstLineEnd === -1 ? input.length : firstLineEnd + 1;
         currentItemLines.push(input.slice(0, firstLineIdx));

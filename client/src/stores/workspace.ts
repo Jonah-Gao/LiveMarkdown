@@ -438,8 +438,9 @@ export const useWorkspaceStore = defineStore('workspace', () => {
      */
     async function readDirAsync(directoryPath: string, targetMap: Map<string, FileNode>): Promise<void> {
         const pendingChildren = new Map<string, string[]>();
-        (await readDirectory(directoryPath))
-            .subscribe({
+        const observable = await readDirectory(directoryPath)
+        return new Promise((resolve, reject) => {
+            observable.subscribe({
                 next: (node) => {
                     targetMap.set(node.path, {...node, children: []})
                     if (node.parentPath) {
@@ -462,21 +463,22 @@ export const useWorkspaceStore = defineStore('workspace', () => {
                         pendingChildren.delete(node.path)
                     }
                 },
-                complete: () => {
-                    console.log("Directory stream finished")
-                },
+                complete: () => resolve(),
                 error: (err) => {
                     console.error('Failed to load', directoryPath, err)
+                    reject(err)
                 }
             })
+        })
     }
 
     /**
      * Stream file content into a tab via streaming.
      */
     async function streamTabAsync(filePath: string): Promise<void> {
-        (await streamTab(filePath))
-            .subscribe({
+        const observable = await streamTab(filePath)
+        return new Promise((resolve, reject) => {
+            observable.subscribe({
                 next: (chunk) => {
                     if (chunk.isMetadata) {
                         const tab = {
@@ -501,13 +503,14 @@ export const useWorkspaceStore = defineStore('workspace', () => {
                         }
                     }
                 },
-                complete: () => {
-                    // Stream completed
-                },
+                complete: () => resolve(),
+
                 error: (err) => {
                     console.error('Stream error:', err)
+                    reject(err)
                 }
             })
+        })
     }
 
     /**
