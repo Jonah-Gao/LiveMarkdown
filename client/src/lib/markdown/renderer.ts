@@ -1,6 +1,7 @@
 ﻿import {ASTNode} from './parser';
 import {TokenType} from './types';
 import {Component, h, VNode, Fragment} from 'vue'
+import DOMPurify from 'dompurify';
 import MarkdownCodeBlock from "@/components/MarkdownCodeBlock.vue";
 import MarkdownIndentedCodeBlock from "@/components/MarkdownIndentedCodeBlock.vue";
 
@@ -21,7 +22,7 @@ class Renderer {
         [TokenType.ITALIC, (n) => h('em', this.renderChildren(n))],
         [TokenType.BOLD_ITALIC, (n) => h('strong', h('em', this.renderChildren(n)))],
         [TokenType.CODE_BLOCK, (n) => h(MarkdownCodeBlock as Component, {
-            code: n.value || '', lang: n.attributes?.lang || 'text'
+            code: n.value || '', lang: n.attributes?.lang || 'plaintext'
         })],
         [TokenType.INDENTED_CODE_BLOCK, (n) => h(MarkdownIndentedCodeBlock as Component, {
             code: n.value || ''
@@ -74,10 +75,13 @@ class Renderer {
         [TokenType.SOFTBREAK, () => h(Fragment, [' '])],
         [TokenType.HARDBREAK, () => h('br')],
         [TokenType.HR, () => h('hr')],
-        [TokenType.PARAGRAPHBREAK, () => h('br')],
         [TokenType.ESCAPE, (n) => h(Fragment, [n.value || ''])],
         [TokenType.TEXT, (n) => h(Fragment, [n.value || ''])],
         [TokenType.PARAGRAPH, (n) => h('p', this.renderChildren(n)) || ''],
+        [TokenType.HTML, (n) => {
+            const tag = n.attributes?.block ? 'div' : 'span';
+            return h(tag, { innerHTML: DOMPurify.sanitize(n.value || '') });
+        }],
     ]);
 
     /**

@@ -1,30 +1,33 @@
-﻿using kernel.Hubs;
+﻿using System.Collections.Concurrent;
+using System.Diagnostics;
+using System.Text;
+using kernel.Hubs;
 using kernel.Utils;
+using Microsoft.AspNetCore.SignalR;
+using Pty.Net;
 
 namespace kernel.Services;
 
-using Microsoft.AspNetCore.SignalR;
-using System.Diagnostics;
-using System.IO;
-using System.Text;
-using System.Threading.Tasks;
-using System.Collections.Concurrent;
-using Pty.Net;
-
-// PythonVenvRunner: prepares a Python virtual environment (venv) and executes user code inside it.
-// Responsibilities:
-// - Ensure a virtual environment exists (or create one)
-// - Write user code to a temporary script and run it using the venv python executable
-// - Stream stdout/stderr back to the caller via SignalR
-// - Track the spawned PTY so it can be resized, written to, or killed
+/// <summary>
+/// Service for executing Python code in a virtual environment.
+/// Responsibilities:
+/// - Ensure a virtual environment exists (or create one)
+/// - Write user code to a temporary script and run it using the venv python executable
+/// - Stream stdout/stderr back to the caller via SignalR
+/// - Track the spawned PTY so it can be resized, written to, or killed
+/// </summary>
 public class PythonVenvRunner(ILogger<PythonVenvRunner> logger, IHubContext<PythonHub> hubContext)
 {
     private readonly ConcurrentDictionary<string, IPtyConnection> _terminals = new();
     private readonly ConcurrentDictionary<string, CancellationTokenSource> _cts = new();
 
-    private async Task EnsureVenvExistsAsync(string venvPath, string systemPythonPath)
+    /// <summary>
+    /// Ensure a virtual environment exists at the specified path.
+    /// Creates one if it doesn't exist.
+    /// </summary>
+    public async Task CreateVenvAsync(string venvPath, string systemPythonPath)
     {
-        // Simple existence check: ensure venv directory and pyvenv.cfg exist.
+        // Check if venv already exists
         if (Directory.Exists(venvPath) && File.Exists(Path.Combine(venvPath, "pyvenv.cfg")))
         {
             logger.LogInformation("Virtual environment already exists at {VenvPath}", LogFormatter.ToGreen(venvPath));
@@ -44,36 +47,37 @@ public class PythonVenvRunner(ILogger<PythonVenvRunner> logger, IHubContext<Pyth
             CreateNoWindow = true
         };
 
-        using (var process = Process.Start(startInfo))
+        using var process = Process.Start(startInfo);
+        if (process == null)
         {
-            if (process == null)
-            {
-                logger.LogError("Failed to start process to create virtual environment.");
-                throw new Exception("Failed to start process to create virtual environment.");
-            }
+            logger.LogError("Failed to start process to create virtual environment.");
+            throw new Exception("Failed to start process to create virtual environment.");
+        }
 
-            await process.WaitForExitAsync();
+        await process.WaitForExitAsync();
 
-            if (process.ExitCode != 0)
-            {
-                var error = await process.StandardError.ReadToEndAsync();
-                logger.LogError("Failed to create virtual environment: {Error}", LogFormatter.ToBrightRed(error));
-                throw new Exception($"Failed to create virtual environment: {error}");
-            }
+        if (process.ExitCode != 0)
+        {
+            var error = await process.StandardError.ReadToEndAsync();
+            logger.LogError("Failed to create virtual environment: {Error}", LogFormatter.ToBrightRed(error));
+            throw new Exception($"Failed to create virtual environment: {error}");
         }
 
         logger.LogInformation("Virtual environment created successfully at {VenvPath}", LogFormatter.ToGreen(venvPath));
     }
 
-    // Called by the frontend to execute code inside a venv.
+    /// <summary>
+    /// Execute Python code in a virtual environment.
+    /// </summary>
     public async Task ExecuteCodeAsync(string connectionId, string terminalId, string userCode, string systemPythonPath,
         string venvPath)
     {
         KillTerminal(terminalId);
 
-        await EnsureVenvExistsAsync(venvPath, systemPythonPath);
+        await CreateVenvAsync(venvPath, systemPythonPath);
         var venvPythonExe = GetVenvPythonExecutable(venvPath);
-        // Use Guid to generate a unique filename without creating it immediately
+
+        // Create temporary script file
         var tempScriptPath = Path.Combine(Path.GetTempPath(), $"kernel_script_{Guid.NewGuid()}.py");
         await File.WriteAllTextAsync(tempScriptPath, userCode, Encoding.UTF8);
         logger.LogInformation(
@@ -81,7 +85,6 @@ public class PythonVenvRunner(ILogger<PythonVenvRunner> logger, IHubContext<Pyth
             LogFormatter.ToCyan(terminalId), LogFormatter.ToCyan(connectionId), LogFormatter.ToGreen(tempScriptPath));
         try
         {
-            // Run the script and stream output back to the client
             await RunProcessAsync(connectionId, terminalId, venvPythonExe, tempScriptPath);
         }
         catch (Exception ex)
@@ -90,9 +93,11 @@ public class PythonVenvRunner(ILogger<PythonVenvRunner> logger, IHubContext<Pyth
                 LogFormatter.ToBrightRed(connectionId), LogFormatter.ToBrightRed(terminalId));
             await hubContext.Clients.Client(connectionId).SendAsync("ReceiveResult", $"[Exception]: {ex.Message}");
         }
-        // Note: File deletion is handled in RunProcessAsync when the process exits
     }
 
+    /// <summary>
+    /// Get the path to the Python executable in the virtual environment.
+    /// </summary>
     private static string GetVenvPythonExecutable(string venvPath)
     {
         // Windows and Unix venv layout differs
@@ -102,9 +107,13 @@ public class PythonVenvRunner(ILogger<PythonVenvRunner> logger, IHubContext<Pyth
         return OperatingSystem.IsWindows() ? winPath : unixPath;
     }
 
+    /// <summary>
+    /// Run a Python script and stream output back to the client.
+    /// </summary>
     private async Task RunProcessAsync(string connectionId, string terminalId, string venvPythonPath, string scriptPath)
     {
-        logger.LogInformation("Spawning venv python: {PythonExe} {Script}", LogFormatter.ToYellow(venvPythonPath),
+        logger.LogInformation("Spawning venv python: {PythonExe} {Script}",
+            LogFormatter.ToYellow(venvPythonPath),
             LogFormatter.ToGreen(scriptPath));
 
         var options = new PtyOptions
@@ -121,20 +130,19 @@ public class PythonVenvRunner(ILogger<PythonVenvRunner> logger, IHubContext<Pyth
             }
         };
 
-        // Use the terminalId as the key for both terminal and its cancellation token
-        // TODO: Automatically stop connection after a process finishes
         using (logger.BeginScope(new Dictionary<string, object>
                    { ["TerminalId"] = terminalId, ["ConnectionId"] = connectionId }))
         {
             try
             {
-                IPtyConnection terminal = await PtyProvider.SpawnAsync(options, CancellationToken.None);
+                var terminal = await PtyProvider.SpawnAsync(options, CancellationToken.None);
                 _terminals[terminalId] = terminal;
                 var cts = new CancellationTokenSource();
                 _cts[terminalId] = cts;
 
                 logger.LogInformation("Spawned PTY for terminal {TerminalId}", LogFormatter.ToCyan(terminalId));
 
+                // Start background task to read output
                 _ = Task.Run(async () =>
                 {
                     var buffer = new byte[4096];
@@ -143,12 +151,12 @@ public class PythonVenvRunner(ILogger<PythonVenvRunner> logger, IHubContext<Pyth
                     {
                         while (!cts.Token.IsCancellationRequested)
                         {
-                            int bytesRead = await stream.ReadAsync(buffer, cts.Token);
+                            var bytesRead = await stream.ReadAsync(buffer, cts.Token);
                             if (bytesRead == 0) break;
 
                             var output = Encoding.UTF8.GetString(buffer, 0, bytesRead);
-                            // Log output at Debug level to avoid flooding logs
-                            logger.LogDebug("[Python {TerminalId}] Output: {Output}", LogFormatter.ToCyan(terminalId),
+                            logger.LogDebug("[Python {TerminalId}] Output: {Output}",
+                                LogFormatter.ToCyan(terminalId),
                                 LogFormatter.ToGreen(output));
                             await hubContext.Clients.Client(connectionId)
                                 .SendAsync("CodeOutput", terminalId, output, cancellationToken: cts.Token);
@@ -169,7 +177,7 @@ public class PythonVenvRunner(ILogger<PythonVenvRunner> logger, IHubContext<Pyth
                         logger.LogInformation("PTY read loop ending for terminal {TerminalId}, cleaning up",
                             LogFormatter.ToCyan(terminalId));
 
-                        // Cleanup the temporary script file
+                        // Clean-up the temporary script file
                         if (File.Exists(scriptPath))
                         {
                             try
@@ -195,7 +203,7 @@ public class PythonVenvRunner(ILogger<PythonVenvRunner> logger, IHubContext<Pyth
                         }
                         else
                         {
-                            // We are not the owner (a new process took over), so just dispose our local resources.
+                            // Not the owner (a new process took over), just dispose local resources
                             terminal.Dispose();
                             cts.Dispose();
                         }
@@ -211,11 +219,13 @@ public class PythonVenvRunner(ILogger<PythonVenvRunner> logger, IHubContext<Pyth
         }
     }
 
+    /// <summary>
+    /// Write input to a running Python process.
+    /// </summary>
     public async Task WriteInputAsync(string terminalId, string input)
     {
         if (_terminals.TryGetValue(terminalId, out var terminal))
         {
-            // Log input at Debug level
             logger.LogDebug("Writing input to python terminal {TerminalId}: {InputPreview}",
                 LogFormatter.ToCyan(terminalId),
                 LogFormatter.ToYellow(input.Length > 64 ? input[..64] + "..." : input));
@@ -225,16 +235,23 @@ public class PythonVenvRunner(ILogger<PythonVenvRunner> logger, IHubContext<Pyth
         }
     }
 
+    /// <summary>
+    /// Resize a Python terminal.
+    /// </summary>
     public void Resize(string terminalId, int cols, int rows)
     {
         if (_terminals.TryGetValue(terminalId, out var terminal))
         {
-            logger.LogInformation("Resizing python PTY {TerminalId} to {Cols}x{Rows}", LogFormatter.ToCyan(terminalId),
+            logger.LogInformation("Resizing python PTY {TerminalId} to {Cols}x{Rows}",
+                LogFormatter.ToCyan(terminalId),
                 LogFormatter.ToYellow(cols), LogFormatter.ToYellow(rows));
             terminal.Resize(cols, rows);
         }
     }
 
+    /// <summary>
+    /// Kill a Python terminal and clean up resources.
+    /// </summary>
     public void KillTerminal(string terminalId)
     {
         if (_terminals.TryRemove(terminalId, out var terminal))

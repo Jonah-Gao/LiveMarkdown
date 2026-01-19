@@ -15,15 +15,15 @@ class MarkdownParser {
     private renderer = new Renderer();
 
     /**
-     * Converts a markdown string into an HTML string.
+     * Converts a Markdown string into an HTML string.
      *
      * The process involves:
-     * 1. Preprocessing: Normalizing the input (e.g., line endings).
+     * 1. Preprocessing: Normalising the input (e.g., line endings).
      * 2. Tokenization (Lexing): Converting text into a stream of tokens.
      * 3. Parsing: Building an Abstract Syntax Tree (AST) from the tokens.
      * 4. Rendering: Traversing the AST to generate HTML.
      *
-     * @param input The raw markdown string.
+     * @param input The raw Markdown string.
      * @returns The generated HTML string.
      */
     render(input: string): VNode {
@@ -41,7 +41,7 @@ class MarkdownParser {
 }
 
 const md = new MarkdownParser();
-const content = md.render("\thhh\n\taaa\n\tddd");
+const content = md.render("```python\n```");
 console.log(content);
 
 export {MarkdownParser};

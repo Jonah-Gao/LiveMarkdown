@@ -1,6 +1,5 @@
 /// <reference types="vite-plugin-electron/electron-env" />
 
-import {FileNode} from "../src/vite-env";
 
 declare namespace NodeJS {
     interface ProcessEnv {
@@ -24,20 +23,31 @@ declare namespace NodeJS {
 }
 
 // Used in Renderer process, expose in `preload.ts`
-interface Window {
-    ipcRenderer: import('electron').IpcRenderer
-    fileAPI: {
-        readDir: (dir: string) => Promise<FileNode[]>
-    }
-    nodePath: {
-        join: (...args: string[]) => string
-        dirname: (p: string) => string
-        basename: (p: string, ext?: string) => string
+declare global {
+    interface Window {
+        ipcRenderer: import('electron').IpcRenderer
+        nodePath: {
+            join: (...args: string[]) => string
+            dirname: (p: string) => string
+            basename: (p: string, ext?: string) => string
+        }
+        windowControls: {
+            minimize(): void
+            maximize(): void
+            close(): void
+            canClose(): void
+            onMaximize(cb: (maximized: boolean) => void): void
+            onBeforeClose(cb: () => void): void
+        }
+        cwd: {
+            setCwd(cwd: string): void
+            getCwd(): Promise<string>
+        }
     }
 }
 
 declare module '*.vue' {
-    import type { DefineComponent } from 'vue'
+    import type {DefineComponent} from 'vue'
     const component: DefineComponent<{}, {}, any>
     export default component
 }

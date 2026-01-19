@@ -1,20 +1,25 @@
 ﻿<script setup lang="ts">
-import {kernelConnection} from "@/services/kernelSignalr.ts";
-import {onMounted, onUnmounted, ref, nextTick} from "vue";
+import {kernelConnection, executePythonCodeAsync, pythonInputAsync} from "@/services/kernelService.ts";
+import {onMounted, onUnmounted, ref, nextTick, watch} from "vue";
 import {Terminal} from "@xterm/xterm";
 import {FitAddon} from "@xterm/addon-fit";
 import '@xterm/xterm/css/xterm.css';
 import {theme} from "@/styles/GithubTerminalTheme.ts";
+import hljs from 'highlight.js'
+import 'highlight.js/styles/github-dark.css'
 import {v4 as uuidv4} from "uuid";
+import {useWorkspaceStore} from "@/stores/workspace.ts";
 
 const props = defineProps<{ code: string, lang: string }>();
 const mdTerminal = ref<HTMLDivElement | null>(null);
 const terminal = ref<HTMLDivElement | null>(null); // Renamed to avoid confusion
+const codeEl = ref<HTMLElement | null>(null)
+const workspace = useWorkspaceStore()
+
 const terminalId: string = uuidv4();
-
 let xterm: Terminal | null = null;
-let fitAddon: FitAddon | null = null;
 
+let fitAddon: FitAddon | null = null;
 // Define callback reference for easier disposal later
 const onOutputReceived = (targetId: string, output: string) => {
     console.log('[SignalR] Received:', output);
@@ -27,8 +32,8 @@ const onOutputReceived = (targetId: string, output: string) => {
         nextTick(() => {
             fitAddon?.fit();
         });
-    }
 
+    }
     // 2. Write to Xterm
     // Note: Handle line breaks, backend python print defaults to \n, xterm needs \r\n
     if (xterm) {
@@ -36,8 +41,8 @@ const onOutputReceived = (targetId: string, output: string) => {
         const formatted = output.replace(/\n/g, '\r\n');
         xterm.write(formatted);
     }
-};
 
+};
 const onCodeExecutionCompleted = (targetId: string) => {
     if (terminalId !== targetId) return;
     console.log(`[SignalR] Code execution completed for terminal ${terminalId}`);
@@ -45,19 +50,19 @@ const onCodeExecutionCompleted = (targetId: string) => {
         xterm.options.cursorBlink = false;
         xterm.options.cursorStyle = 'block';
     }
-};
 
+};
 onMounted(async () => {
     // 1. Initialize Terminal UI
-    initializeTerminal();
 
+    initializeTerminal();
     // 2. Register SignalR listener
     // Remove old listener with same name first (prevent duplicate printing caused by hot reload or component reuse)
     // TODO: add function to run code in Run terminal
     kernelConnection.off('CodeOutput');
     kernelConnection.on('CodeOutput', onOutputReceived);
-    kernelConnection.on('CodeExecutionCompleted', onCodeExecutionCompleted);
 
+    kernelConnection.on('CodeExecutionCompleted', onCodeExecutionCompleted);
     // 3. Ensure connection is started
     if (kernelConnection.state !== 'Connected') {
         try {
@@ -67,14 +72,31 @@ onMounted(async () => {
             console.error('SignalR Start Failed', err);
         }
     }
-});
 
+});
 onUnmounted(() => {
     // Cleanup
     kernelConnection.off('CodeOutput', onOutputReceived);
     xterm?.dispose();
     xterm = null;
+
 });
+
+watch(
+    [() => props.code, () => props.lang],
+    async () => {
+        await nextTick()
+        const el = codeEl.value
+        if (!el) return
+
+        // remove previous highlight
+        delete (el as any).dataset.highlighted
+
+        // hljs highlight
+        hljs.highlightElement(el)
+    },
+    {immediate: true}
+)
 
 function initializeTerminal() {
     xterm = new Terminal({
@@ -94,9 +116,8 @@ function initializeTerminal() {
 
     // Initial fit might be invalid (because parent container might be hidden), but do it anyway
     fitAddon.fit();
-    xterm.onData(data => {
-        console.log('Input:', JSON.stringify(data));
-        kernelConnection.invoke('PythonInput', terminalId, data);
+    xterm.onData(async data => {
+        await pythonInputAsync(terminalId, data);
     })
 }
 
@@ -108,21 +129,9 @@ async function executeCodeBlock() {
         fitAddon?.fit();
     }
 
-    try {
-        console.log("Invoking ExecuteCodeAsync...");
-        // It's recommended to let the backend handle the path, don't pass absolute paths from the frontend, it's unsafe and inflexible
-        // TODO: Remove hardcoded paths. These should be configured on the server side or passed via configuration.
-        await kernelConnection.invoke(
-            'ExecuteCodeAsync',
-            terminalId,
-            props.code,
-            "C:\\Users\\OOOOMGOSH\\AppData\\Local\\Programs\\Python\\Python312\\python.exe",
-            "E:\\CS_NEA_Project\\test\\.venv"
-        );
-    } catch (err) {
-        console.error('Error invoking code:', err);
-        xterm?.writeln(`\r\n[Error] ${err}`);
-    }
+    const venvPath = window.nodePath.join(workspace.rootDirectory, '.venv');
+
+    await executePythonCodeAsync(terminalId, props.code, workspace.pythonInterpreterPath, venvPath)
 }
 
 function copyCodeBlock() {
@@ -148,7 +157,7 @@ function copyCodeBlock() {
                 <span class="material-symbols-outlined">content_copy</span>
             </div>
         </div>
-        <pre><code :class="lang">{{ code }}</code></pre>
+        <pre><code ref="codeEl" :class="`language-${lang}`">{{ code }}</code></pre>
         <div class="md-output-console" id="md-terminal" ref="mdTerminal">
             <div id="terminal" ref="terminal"></div>
         </div>
@@ -156,5 +165,7 @@ function copyCodeBlock() {
 </template>
 
 <style scoped>
-
+pre code.hljs {
+    padding: 0;
+}
 </style>

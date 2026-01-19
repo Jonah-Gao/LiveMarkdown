@@ -26,6 +26,7 @@ export interface INodePathAPI {
     join: (...args: string[]) => string
     dirname: (p: string) => string
     basename: (p: string, ext?: string) => string
+    normalize: (p: string) => string
 }
 
 export interface ITerminalAPI {
@@ -42,6 +43,18 @@ declare global {
         ipcRenderer: {
             on: (channel: string, listener: (event: any, ...args: any[]) => void) => void
             send: (channel: string, ...args: any[]) => void
+        }
+        windowControls: {
+            minimize(): void
+            maximize(): void
+            close(): void
+            canClose(): void
+            onMaximize(cb: (maximized: boolean) => void): void
+            onBeforeClose(cb: () => void): void
+        }
+        cwd: {
+            setCwd(cwd: string): void
+            getCwd(): Promise<string>
         }
         require?: NodeRequire
     }
