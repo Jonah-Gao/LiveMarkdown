@@ -26,6 +26,7 @@ export interface INodePathAPI {
     join: (...args: string[]) => string
     dirname: (p: string) => string
     basename: (p: string, ext?: string) => string
+    normalize: (p: string) => string
 }
 
 export interface ITerminalAPI {

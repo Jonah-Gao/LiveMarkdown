@@ -80,4 +80,5 @@ export interface PanelLayout {
 
     // Open files
     openedFiles: string[]
+    activeFile: string
 }

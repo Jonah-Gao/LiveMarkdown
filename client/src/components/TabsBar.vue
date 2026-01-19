@@ -28,7 +28,7 @@ const {tabs, activeTabIndex, isMarkdownTab, currentViewMode} = storeToRefs(works
             </div>
         </div>
         <div v-if="isMarkdownTab" class="tab-view-toggle">
-            <button
+            <div
                 v-for="btn in props.viewModeButtons"
                 :key="btn.value"
                 class="tab-view-btn"
@@ -37,7 +37,7 @@ const {tabs, activeTabIndex, isMarkdownTab, currentViewMode} = storeToRefs(works
                 :title="btn.label"
             >
                 <span class="material-symbols-outlined">{{ btn.icon }}</span>
-            </button>
+            </div>
         </div>
     </div>
 </template>

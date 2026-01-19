@@ -27,7 +27,14 @@ contextBridge.exposeInMainWorld('ipcRenderer', {
 contextBridge.exposeInMainWorld("nodePath", {
     join: (...args: string[]): string => path.join(...args),
     dirname: (p: string): string => path.dirname(p),
-    basename: (p: string, ext?: string): string => path.basename(p, ext)
+    basename: (p: string, ext?: string): string => path.basename(p, ext),
+    normalize: (p: string): string => {
+        let n = path.normalize(p)
+        if (n.length > 1 && n.endsWith(path.sep)) {
+            n = n.slice(0,-1)
+        }
+        return n.toLowerCase()
+    }
 })
 
 contextBridge.exposeInMainWorld('windowControls', {

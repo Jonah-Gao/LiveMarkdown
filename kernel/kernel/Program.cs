@@ -59,6 +59,7 @@ builder.Services.AddCors(options =>
 builder.Services.AddSingleton<TerminalService>();
 builder.Services.AddSingleton<PythonVenvRunner>();
 builder.Services.AddSingleton<FileService>();
+builder.Services.AddSingleton<FileWatcherService>();
 builder.Services.AddSignalR().AddJsonProtocol();
 
 var app = builder.Build();

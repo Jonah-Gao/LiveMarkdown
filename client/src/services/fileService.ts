@@ -80,3 +80,29 @@ export async function createDirectory(dirPath: string): Promise<void> {
     await ensureFileServiceConnection()
     await fileServiceConnection.invoke("CreateDirectory", dirPath)
 }
+
+/**
+ * Start watching a directory for file changes.
+ * The client will receive FileChanged events for this directory.
+ */
+export async function startWatching(directoryPath: string): Promise<void> {
+    await ensureFileServiceConnection()
+    await fileServiceConnection.invoke("StartWatchingAsync", directoryPath)
+}
+
+/**
+ * Stop watching a directory for file changes.
+ */
+export async function stopWatching(directoryPath: string): Promise<void> {
+    await ensureFileServiceConnection()
+    await fileServiceConnection.invoke("StopWatchingAsync", directoryPath)
+}
+
+/**
+ * Register a callback for file change events.
+ * @returns A function to unregister the callback.
+ */
+export function onFileChanged(callback: (dirPath: string) => void): () => void {
+    fileServiceConnection.on('DirectoryDirty', callback)
+    return () => fileServiceConnection.off('DirectoryDirty', callback)
+}

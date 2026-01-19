@@ -1,137 +1,237 @@
-import {app, BrowserWindow, Menu} from 'electron';
-import {fileURLToPath} from 'node:url';
-import path from 'node:path';
-import {ipcMain} from 'electron'
-import Store from "electron-store"
+/**
+ * Electron Main Process
+ *
+ * Handles application lifecycle, window management, and IPC communication.
+ * Supports both development and production environments.
+ */
 
+import { app, BrowserWindow, Menu, ipcMain } from 'electron'
+import { fileURLToPath } from 'node:url'
+import path from 'node:path'
+import Store from 'electron-store'
 
-const __dirname: string = path.dirname(fileURLToPath(import.meta.url));
-const store = new Store<{
+// =============================================================================
+// Environment & Path Configuration
+// =============================================================================
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url))
+
+/**
+ * Application directory structure:
+ * ├─ dist/              - Vite build output (renderer)
+ * │  └── index.html
+ * └─ dist-electron/     - Electron build output (main process)
+ *    ├── main.js
+ *    └── preload.mjs
+ */
+const APP_ROOT = path.join(__dirname, '..')
+const RENDERER_DIST = path.join(APP_ROOT, 'dist')
+
+// Use bracket notation to avoid Vite's define plugin transformation
+const VITE_DEV_SERVER_URL = process.env['VITE_DEV_SERVER_URL']
+
+/** Whether the app is running in development mode */
+const isDev = !!VITE_DEV_SERVER_URL
+
+/** Path to public assets (varies between dev and prod) */
+const PUBLIC_PATH = isDev ? path.join(APP_ROOT, 'public') : RENDERER_DIST
+
+// Set environment variables for other modules
+process.env.APP_ROOT = APP_ROOT
+process.env.VITE_PUBLIC = PUBLIC_PATH
+
+// =============================================================================
+// Persistent Storage
+// =============================================================================
+
+interface StoreSchema {
     lastCwd?: string
-}>()
+}
 
-// The built directory structure
+const store = new Store<StoreSchema>({
+    name: 'config',
+    defaults: {
+        lastCwd: undefined
+    }
+})
 
-//
-// ├─┬─┬ dist
-// │ │ └── index.html
-// │ │
-// │ ├─┬ dist-electron
-// │ │ ├── main.js
-// │ │ └── preload.mjs
-// │
-process.env.APP_ROOT = path.join(__dirname, '..')
-// 🚧 Use ['ENV_NAME'] avoid vite:define plugin - Vite@2.x
+// =============================================================================
+// Window State
+// =============================================================================
 
-export const VITE_DEV_SERVER_URL = process.env['VITE_DEV_SERVER_URL']
-export const RENDERER_DIST = path.join(process.env.APP_ROOT, 'dist')
-process.env.VITE_PUBLIC = VITE_DEV_SERVER_URL ? path.join(process.env.APP_ROOT, 'public') : RENDERER_DIST
+let mainWindow: BrowserWindow | null = null
+let pendingClose = false
+let allowClose = false
 
-let win: BrowserWindow | null
-let pendingClose = false;
-let allowClose = false;
+// =============================================================================
+// Window Management
+// =============================================================================
 
-async function createWindow(): Promise<void> {
+/**
+ * Create the main application window.
+ * Handles both development (with dev server) and production (with built files) modes.
+ */
+async function createMainWindow(): Promise<void> {
+    // Reset close state for new window
+    pendingClose = false
+    allowClose = false
 
-    pendingClose = false;
-    allowClose = false;
-
-    win = new BrowserWindow({
+    mainWindow = new BrowserWindow({
         width: 1200,
         height: 800,
+        minWidth: 800,
+        minHeight: 600,
+        frame: false,
+        icon: path.join(PUBLIC_PATH, 'electron-vite.svg'),
+        show: false, // Don't show until ready
         webPreferences: {
             preload: path.join(__dirname, 'preload.mjs'),
             contextIsolation: true,
             nodeIntegration: false,
             sandbox: false,
         },
-        frame: false,
-        icon: path.join(process.env.VITE_PUBLIC ?? "", 'electron-vite.svg'),
-    })
-    // Test active push message to Renderer-process.
-
-    win.webContents.on('did-finish-load', () => {
-        win?.webContents.send('main-process-message', (new Date).toLocaleString())
     })
 
+    // Show window when ready to prevent visual flash
+    mainWindow.once('ready-to-show', () => {
+        mainWindow?.show()
+        mainWindow?.maximize()
+    })
 
-    if (VITE_DEV_SERVER_URL) {
+    // Send timestamp to renderer when loaded
+    mainWindow.webContents.on('did-finish-load', () => {
+        const timestamp = new Date().toLocaleString()
+        mainWindow?.webContents.send('main-process-message', timestamp)
+    })
 
-        await win.loadURL(VITE_DEV_SERVER_URL)
+    // Handle window maximize/unmaximize events
+    mainWindow.on('maximize', () => {
+        mainWindow?.webContents.send('win:maximized', true)
+    })
+
+    mainWindow.on('unmaximize', () => {
+        mainWindow?.webContents.send('win:maximized', false)
+    })
+
+    // Handle graceful close with save confirmation
+    mainWindow.on('close', (event) => {
+        if (allowClose) return
+
+        event.preventDefault()
+
+        if (pendingClose) return
+        pendingClose = true
+
+        // Notify renderer to save changes before closing
+        mainWindow?.webContents.send('app:before-close')
+    })
+
+    // Load content based on environment
+    if (isDev) {
+        await mainWindow.loadURL(VITE_DEV_SERVER_URL!)
+        // Open DevTools in development
+        mainWindow.webContents.openDevTools({ mode: 'detach' })
     } else {
-        // win.loadFile('dist/index.html')
-        await win.loadFile(path.join(RENDERER_DIST, 'index.html'))
+        await mainWindow.loadFile(path.join(RENDERER_DIST, 'index.html'))
     }
-
-    win?.maximize()
-
-    win?.on('maximize', () => {
-        win?.webContents.send('win:maximized', true)
-    })
-
-    win?.on('unmaximize', () => {
-        win?.webContents.send('win:maximized', false)
-    })
-
-    win?.on('close', (e) => {
-        if (allowClose) return;
-        e.preventDefault();
-        if (pendingClose) return;
-        pendingClose = true;
-        win?.webContents.send('app:before-close');
-    });
 }
 
+// =============================================================================
+// IPC Handlers - Window Controls
+// =============================================================================
 
-ipcMain.on('win:minimize', () => win?.minimize())
+/** Minimize the main window */
+ipcMain.on('win:minimize', () => {
+    mainWindow?.minimize()
+})
 
+/** Toggle maximize/restore state */
 ipcMain.on('win:maximize', () => {
-    if (win?.isMaximized()) win.unmaximize()
-    else win?.maximize()
+    if (mainWindow?.isMaximized()) {
+        mainWindow.unmaximize()
+    } else {
+        mainWindow?.maximize()
+    }
 })
 
+/** Request window close (triggers save confirmation) */
 ipcMain.on('win:close', () => {
-    if (!win) return;
-    win.close();
+    mainWindow?.close()
 })
 
+/** Confirm close after save completion */
 ipcMain.on('win:can-close', () => {
-    if (!win) return;
-    allowClose = true;
-    pendingClose = false;
-    win.close();
-});
+    if (!mainWindow) return
 
-ipcMain.handle("cwd:get", () => {
-    return store.get("lastCwd")
+    allowClose = true
+    pendingClose = false
+    mainWindow.close()
 })
 
-ipcMain.on("cwd:set", (_, cwd: string) => {
-    store.set("lastCwd", cwd)
+// =============================================================================
+// IPC Handlers - Workspace
+// =============================================================================
+
+/** Get the last used workspace directory */
+ipcMain.handle('cwd:get', () => {
+    return store.get('lastCwd')
 })
 
+/** Save the current workspace directory */
+ipcMain.on('cwd:set', (_, cwd: string) => {
+    store.set('lastCwd', cwd)
+})
 
-// Quit when all windows are closed, except on macOS. There, it's common
+// =============================================================================
+// Application Lifecycle
+// =============================================================================
 
-// for applications and their menu bar to stay active until the user quits
-// explicitly with Cmd + Q.
+/**
+ * Quit when all windows are closed (except on macOS).
+ * On macOS, apps typically stay active until explicitly quit with Cmd+Q.
+ */
 app.on('window-all-closed', () => {
     if (process.platform !== 'darwin') {
         app.quit()
-        win = null
-    }
-})
-app.on('activate', async () => {
-    // On OS X it's common to re-create a window in the app when the
-    // dock icon is clicked and there are no other windows open.
-    if (BrowserWindow.getAllWindows().length === 0) {
-        await createWindow()
+        mainWindow = null
     }
 })
 
+/**
+ * Re-create window when dock icon is clicked (macOS).
+ * This is the standard macOS behavior for apps without open windows.
+ */
+app.on('activate', async () => {
+    if (BrowserWindow.getAllWindows().length === 0) {
+        await createMainWindow()
+    }
+})
+
+/**
+ * Initialize application when Electron is ready.
+ */
 app.whenReady().then(async () => {
-    if (!VITE_DEV_SERVER_URL) {
+    // Disable menu in production
+    if (!isDev) {
         Menu.setApplicationMenu(null)
     }
-    await createWindow()
+
+    await createMainWindow()
+
+    // Log startup info in development
+    if (isDev) {
+        console.log('[Electron] Main process started')
+        console.log('[Electron] Dev server URL:', VITE_DEV_SERVER_URL)
+    }
+})
+
+/**
+ * Handle uncaught exceptions gracefully
+ */
+process.on('uncaughtException', (error) => {
+    console.error('[Electron] Uncaught exception:', error)
+})
+
+process.on('unhandledRejection', (reason) => {
+    console.error('[Electron] Unhandled rejection:', reason)
 })

@@ -6,7 +6,10 @@ import {
     streamTab,
     saveTabAsync,
     saveWorkspaceSettingsAsync,
-    loadLayoutAsync
+    loadLayoutAsync,
+    startWatching,
+    stopWatching,
+    onFileChanged
 } from '@/services/fileService'
 import {FileNode, PanelLayout, SidebarPanel, Tab, UIFileNode, ViewMode} from '@/types/workspace'
 
@@ -79,8 +82,16 @@ const DEFAULT_LAYOUT_STATE: PanelLayout = {
     terminalVisible: false,
     activeTopPanel: 'explorer',
     activeBottomPanel: null,
-    openedFiles: []
+    openedFiles: [],
+    activeFile: ''
 }
+
+const fileChangeQueue: Array<{
+    dirPath: string;
+    resolve: () => void;
+    reject: (err: unknown) => void;
+}> = [];
+let processing = false;
 
 export const useWorkspaceStore = defineStore('workspace', () => {
     // Editor state
@@ -92,6 +103,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     // File tree state
     const fileTree = ref<UIFileNode[]>([])
     const nodes = reactive(new Map<string, FileNode>())
+    const nodeVersion = ref(0)
 
     // Workspace state
     const rootDirectory = ref(DEFAULT_ROOT_DIRECTORY)
@@ -110,13 +122,19 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     // Unified layout state - all UI panel states in one place
     const layoutState = reactive<PanelLayout>({...DEFAULT_LAYOUT_STATE})
 
+    // File watcher cleanup function
+    let fileWatcherCleanup: (() => void) | null = null
+
     // Computed: workspace state
     const hasWorkspace = computed(() => !!rootDirectory.value)
     const hasTabs = computed(() => tabs.value.length > 0)
 
     // Computed: build visible file tree from flat node map
     const visibleFileTree = computed<UIFileNode[]>(() => {
+        nodeVersion.value
+        console.log(rootDirectory.value)
         if (!rootDirectory.value) {
+            console.log('No root directory set, returning empty file tree.')
             return []
         }
 
@@ -139,6 +157,8 @@ export const useWorkspaceStore = defineStore('workspace', () => {
         }
 
         const root = build(rootDirectory.value)
+        console.log('Building visible file tree...')
+        console.log(root)
         return root ? [root] : []
     })
 
@@ -296,6 +316,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
         if (targetIndex === -1) return
 
         activeTabIndex.value = targetIndex
+        layoutState.activeFile = tab.path
         code.value = tab.content
         applyViewModeForActiveTab()
     }
@@ -316,6 +337,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
 
             if (tabs.value.length === 0) {
                 activeTabIndex.value = -1
+                layoutState.activeFile = ''
                 code.value = ''
                 applyViewModeForActiveTab()
                 return
@@ -323,6 +345,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
 
             if (activeTabIndex.value >= index) {
                 activeTabIndex.value = Math.max(0, tabs.value.length - 1)
+                layoutState.activeFile = tabs.value[activeTabIndex.value].path
             }
             code.value = tabs.value[activeTabIndex.value]?.content || ''
             applyViewModeForActiveTab()
@@ -437,46 +460,78 @@ export const useWorkspaceStore = defineStore('workspace', () => {
      * Read directory contents recursively via streaming.
      */
     async function readDirAsync(directoryPath: string, targetMap: Map<string, FileNode>): Promise<void> {
+        const normalizedDir = window.nodePath.normalize(directoryPath)
+        const tempMap = new Map<string, FileNode>()
+        if (targetMap.has(normalizedDir)){
+            tempMap.set(normalizedDir, {...targetMap.get(normalizedDir)!, children: []})
+        }
         const pendingChildren = new Map<string, string[]>();
-        const observable = await readDirectory(directoryPath)
-        return new Promise((resolve, reject) => {
+
+        const observable = await readDirectory(normalizedDir)
+
+        await new Promise<void>((resolve, reject) => {
             observable.subscribe({
                 next: (node) => {
-                    targetMap.set(node.path, {...node, children: []})
-                    if (node.parentPath) {
-                        const parent = targetMap.get(node.parentPath)
+                    const normalizedPath = window.nodePath.normalize(node.path)
+                    const normalizedParentPath = node.parentPath ? window.nodePath.normalize(node.parentPath) : null
+                    const normalizedNode = {
+                        ...node,
+                        path: normalizedPath,
+                        parentPath: normalizedParentPath,
+                        children: []
+                    }
+
+                    tempMap.set(normalizedPath, normalizedNode)
+                    if (normalizedParentPath) {
+                        const parent = tempMap.get(normalizedParentPath)
                         if (parent) {
-                            parent.children.push(node.path)
+                            parent.children.push(normalizedPath)
                         } else {
                             // Parent not yet loaded, queue this child
-                            const list = pendingChildren.get(node.parentPath) ?? []
-                            list.push(node.path)
-                            pendingChildren.set(node.parentPath, list)
+                            const list = pendingChildren.get(normalizedParentPath) ?? []
+                            list.push(normalizedPath)
+                            pendingChildren.set(normalizedParentPath, list)
                         }
                     }
 
                     // Check if this node has pending children
-                    const waiting = pendingChildren.get(node.path)
+                    const waiting = pendingChildren.get(normalizedPath)
                     if (waiting) {
-                        const me = targetMap.get(node.path)!
+                        const me = tempMap.get(normalizedPath)!
                         me.children.push(...waiting)
-                        pendingChildren.delete(node.path)
+                        pendingChildren.delete(normalizedPath)
                     }
                 },
                 complete: () => resolve(),
                 error: (err) => {
-                    console.error('Failed to load', directoryPath, err)
+                    console.error('Failed to load', normalizedDir, err)
                     reject(err)
                 }
             })
         })
+        removeSubNodes(normalizedDir, targetMap)
+        for (const [path, node] of tempMap.entries()) {
+            targetMap.set(path, node)
+        }
+        nodeVersion.value++
+        console.log(targetMap)
+    }
+
+    function removeSubNodes(dirPath: string, targetMap: Map<string, FileNode>): void {
+        const normalized = window.nodePath.normalize(dirPath) + '\\'
+        for (const key of Array.from(targetMap.keys())) {
+            if (key.startsWith(normalized)) {
+                targetMap.delete(key);
+            }
+        }
     }
 
     /**
      * Stream file content into a tab via streaming.
      */
     async function streamTabAsync(filePath: string): Promise<void> {
-        const observable = await streamTab(filePath)
+        const normalizedPath = window.nodePath.normalize(filePath)
+        const observable = await streamTab(normalizedPath)
         return new Promise((resolve, reject) => {
             observable.subscribe({
                 next: (chunk) => {
@@ -484,7 +539,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
                         const tab = {
                             id: chunk.id,
                             name: chunk.name,
-                            path: chunk.path,
+                            path: window.nodePath.normalize(chunk.path),
                             content: '',
                             isDirty: false,
                         }
@@ -537,6 +592,78 @@ export const useWorkspaceStore = defineStore('workspace', () => {
         await readDirAsync(rootDirectory.value, nodes)
     }
 
+    async function processQueue() {
+        if (processing) return;
+        processing = true;
+
+        while (fileChangeQueue.length) {
+            const {dirPath, resolve, reject} = fileChangeQueue.shift()!;
+            try {
+                await readDirAsync(dirPath, nodes);
+                resolve();
+            } catch (err) {
+                reject(err);
+            }
+        }
+
+        processing = false;
+    }
+
+    /**
+     * Handle file change events from the backend file watcher.
+     * Performs atomic incremental updates to the file tree.
+     */
+    async function handleFileChange(dirPath: string): Promise<void> {
+        const normalizedPath = window.nodePath.normalize(dirPath)
+        return new Promise<void>((resolve, reject) => {
+            fileChangeQueue.push({dirPath: normalizedPath, resolve, reject});
+            // 触发处理（若未在跑则启动）
+            void processQueue();
+        });
+    }
+
+    /**
+     * Start watching the workspace directory for file changes.
+     */
+    async function startFileWatcher(): Promise<void> {
+        if (!rootDirectory.value) return
+
+        // Clean up existing watcher
+        await stopFileWatcher()
+
+        try {
+            // Start watching on the backend
+            await startWatching(rootDirectory.value)
+
+            // Listen for file change events
+            fileWatcherCleanup = onFileChanged(handleFileChange)
+            console.log('File watcher started for:', rootDirectory.value)
+        } catch (err) {
+            console.error('Failed to start file watcher:', err)
+        }
+    }
+
+    /**
+     * Stop watching the workspace directory for file changes.
+     */
+    async function stopFileWatcher(): Promise<void> {
+        // Unregister event handler
+        if (fileWatcherCleanup) {
+            fileWatcherCleanup()
+            fileWatcherCleanup = null
+        }
+
+        // Stop watching on the backend
+        if (rootDirectory.value) {
+            try {
+                await stopWatching(rootDirectory.value)
+                console.log('File watcher stopped for:', rootDirectory.value)
+            } catch (err) {
+                console.error('Failed to stop file watcher:', err)
+            }
+        }
+    }
+
     /**
      * Toggle folder expansion state.
      */
@@ -580,11 +707,17 @@ export const useWorkspaceStore = defineStore('workspace', () => {
      * Set the workspace root directory and load file tree.
      */
     async function setWorkspaceDirectory(directoryPath: string): Promise<void> {
+        // Stop previous file watcher
+        await stopFileWatcher()
+
         nodes.clear()
         fileTree.value = []
-        rootDirectory.value = directoryPath.trim()
+        rootDirectory.value = window.nodePath.normalize(directoryPath.trim())
         if (!rootDirectory.value) return
         await loadFileTree()
+
+        // Start file watcher for the new directory
+        await startFileWatcher()
     }
 
     /**
@@ -634,11 +767,16 @@ export const useWorkspaceStore = defineStore('workspace', () => {
             layoutState.activeBottomPanel = settings.activeBottomPanel ?? null
 
             // Restore opened files
-            layoutState.openedFiles = settings.openedFiles
+            layoutState.openedFiles = (settings.openedFiles ?? []).map(window.nodePath.normalize)
             await openWorkspace(rootDirectory.value)
             for (const filePath of layoutState.openedFiles) {
                 await streamTabAsync(filePath)
             }
+
+            // Restore active file
+            layoutState.activeFile = window.nodePath.normalize(settings.activeFile ?? '')
+            const activeTab = tabs.value.find(t => t.path === layoutState.activeFile) || tabs.value[0]
+            openTab(activeTab)
         }
     }
 
@@ -701,6 +839,11 @@ export const useWorkspaceStore = defineStore('workspace', () => {
         createNewWorkspace,
         setWorkspaceDirectory,
         saveWorkspaceSettings,
-        loadWorkspaceSettings
+        loadWorkspaceSettings,
+
+        // File watcher actions
+        startFileWatcher,
+        stopFileWatcher,
+        handleFileChange
     }
 })
