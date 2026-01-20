@@ -2,6 +2,7 @@
 import {onMounted, ref} from 'vue'
 import {storeToRefs} from 'pinia'
 import FileExplorer from './components/FileExplorer.vue'
+import SearchPanel from './components/SearchPanel.vue'
 import TabsBar from './components/TabsBar.vue'
 import Editor from './components/Editor.vue'
 import Preview from './components/Preview.vue'
@@ -13,6 +14,7 @@ const workspace = useWorkspaceStore()
 const {
     explorerStyle,
     showExplorer,
+    showSearch,
     showTerminal,
     showCodePane,
     showPreviewPane,
@@ -54,14 +56,17 @@ function isBottomButtonActive(index: number): boolean {
 onMounted(async () => {
     // Initialize workspace with last working directory
     workspace.rootDirectory = await window.cwd.getCwd()
+    workspace.displayRootDirectory = await window.cwd.getDisplayCwd()
+    console.log("root directory:", workspace.rootDirectory)
+    console.log("display root directory:", workspace.displayRootDirectory)
     await workspace.loadWorkspaceSettings()
 
     // Set up window close handler
     window.windowControls.onBeforeClose(() => {
-        console.log("Window is closing, saving state...");
         workspace.saveDirtyTabs()
         workspace.saveWorkspaceSettings()
         window.cwd.setCwd(workspace.rootDirectory)
+        window.cwd.setDisplayCwd(workspace.displayRootDirectory)
         window.windowControls.canClose()
     })
 })
@@ -104,7 +109,11 @@ onMounted(async () => {
                             v-show="showExplorer"
                             :style="explorerStyle"
                         />
-                        <div v-show="showExplorer" class="vertical-resizer"
+                        <SearchPanel
+                            v-show="showSearch"
+                            :style="explorerStyle"
+                        />
+                        <div v-show="showExplorer || showSearch" class="vertical-resizer"
                              @mousedown="workspace.startExplorerResize"></div>
 
                         <div class="editor-container">

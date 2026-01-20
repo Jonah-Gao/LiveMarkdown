@@ -116,8 +116,7 @@ public class FileWatcherService(ILogger<FileWatcherService> logger) : IDisposabl
         {
             var parentPath = Path.GetDirectoryName(e.FullPath) ?? string.Empty;
             var rootPath = GetWatcherRootPath(sender);
-
-            logger.LogDebug("File created: {Path}", e.FullPath);
+            
             MarkDirectoryDirty(rootPath, parentPath);
         }
         catch (Exception ex)
@@ -132,8 +131,7 @@ public class FileWatcherService(ILogger<FileWatcherService> logger) : IDisposabl
         {
             var parentPath = Path.GetDirectoryName(e.FullPath) ?? string.Empty;
             var rootPath = GetWatcherRootPath(sender);
-
-            logger.LogDebug("File deleted: {Path}", e.FullPath);
+            
             MarkDirectoryDirty(rootPath, parentPath);
         }
         catch (Exception ex)
@@ -148,9 +146,7 @@ public class FileWatcherService(ILogger<FileWatcherService> logger) : IDisposabl
         {
             var parentPath = Path.GetDirectoryName(e.FullPath) ?? string.Empty;
             var rootPath = GetWatcherRootPath(sender);
-
-
-            logger.LogDebug("File renamed: {OldPath} -> {NewPath}", e.OldFullPath, e.FullPath);
+            
             MarkDirectoryDirty(rootPath, parentPath);
 
             var oldParent = Path.GetDirectoryName(e.OldFullPath) ?? string.Empty;

@@ -1,5 +1,5 @@
 ﻿<script setup lang="ts">
-import {onMounted, onUnmounted, ref, watch} from 'vue'
+import {nextTick, onMounted, onUnmounted, ref, watch} from 'vue'
 import {storeToRefs} from 'pinia'
 import {Terminal as XTerminal} from '@xterm/xterm'
 import {FitAddon} from '@xterm/addon-fit'
@@ -70,20 +70,22 @@ async function initializeXterm(): Promise<void> {
 }
 
 // Watch: fit terminal when shown
-watch(showTerminal, (newVal) => {
+watch(showTerminal, async (newVal) => {
     if (newVal && fitAddon) {
-        setTimeout(() => fitAddon!.fit(), 100)
+        await nextTick()
+        fitAddon.fit()
     }
 })
 
 // Watch: resize terminal when height changes
-watch(() => layoutState.value.terminalHeight, () => {
-    setTimeout(handleResize, 50)
+watch(() => layoutState.value.terminalHeight, async () => {
+    await nextTick()
+    handleResize()
 })
 
 onMounted(async () => {
     await initializeXterm()
-    await initializeTerminal(workspace.rootDirectory)
+    await initializeTerminal(workspace.displayRootDirectory)
     terminalConnection.on('TerminalOutput', handleTerminalOutput)
     window.addEventListener('resize', handleResize)
 })
@@ -100,9 +102,70 @@ onUnmounted(async () => {
     <div class="terminal-container" :style="terminalStyle">
         <div class="terminal-title-bar">
             <div class="terminal-title">
-                <span>{{ 'Terminal' }}</span>
+                <span>{{ 'TERMINAL' }}</span>
             </div>
         </div>
         <div class="terminal-host" ref="terminalHost"></div>
     </div>
 </template>
+
+<style scoped>
+.terminal-container {
+    display: flex;
+    flex-direction: column;
+    min-height: 150px;
+    max-height: 80vh;
+    background-color: var(--bg-tertiary);
+    overflow: hidden;
+}
+
+.terminal-title-bar {
+    display: flex;
+    height: 35px;
+    padding: 0 12px;
+    font-size: 12px;
+    align-items: center;
+    cursor: default;
+    user-select: none;
+    flex-shrink: 0;
+    background-color: var(--bg-tertiary);
+    //border-bottom: 1px solid var(--widget-border-color);
+    gap: 12px;
+}
+
+.terminal-title {
+    display: flex;
+    align-items: center;
+    height: 100%;
+    padding: 0 2px;
+    color: var(--text-primary);
+    font-weight: 500;
+    position: relative;
+}
+
+.terminal-title::after {
+    content: '';
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 1px;
+    background-color: var(--accent-color-secondary);
+}
+
+.terminal-title span {
+    padding: 0;
+    box-shadow: none;
+}
+
+.terminal-host {
+    flex: 1;
+    overflow: hidden;
+    background-color: var(--bg-tertiary);
+}
+
+.terminal-host :deep(.xterm) {
+    padding: 12px 16px;
+    height: 100%;
+}
+</style>

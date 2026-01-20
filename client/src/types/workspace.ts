@@ -3,13 +3,14 @@
  * Contains the essential file metadata and tree structure pointers.
  */
 export interface FileNode {
-    name: string
-    path: string
+    name: string              // Display name with original case
+    path: string              // Lowercase normalized path for storage/comparison
+    displayPath: string       // Original case path for display in UI
     parentPath: string | null
     extension: string
     isDirectory: boolean
-    children: string[]      // Paths to child nodes
-    expanded: boolean       // UI state for directory expansion
+    children: string[]        // Paths to child nodes
+    expanded: boolean         // UI state for directory expansion
 }
 
 /**
@@ -19,6 +20,7 @@ export interface FileNode {
 export interface UIFileNode {
     name: string
     path: string
+    displayPath: string       // Original case path for display
     extension: string
     isDirectory: boolean
     children: UIFileNode[]
@@ -74,6 +76,7 @@ export interface PanelLayout {
 
     // Panel visibility state
     explorerVisible: boolean
+    searchVisible: boolean
     terminalVisible: boolean
     activeTopPanel: SidebarPanel
     activeBottomPanel: SidebarPanel

@@ -15,3 +15,23 @@ const {renderedVNode, previewPaneStyle, showPreviewPane} = storeToRefs(workspace
         </div>
     </div>
 </template>
+
+<style scoped>
+.preview-main {
+    display: flex;
+    flex-direction: column;
+    flex: 1 1 auto;
+    min-width: 0;
+    background-color: var(--bg-secondary);
+    overflow: hidden;
+}
+
+.markdown-body {
+    width: 100%;
+    flex: 1;
+    display: block;
+    padding: 24px 48px;
+    overflow-y: auto;
+    background-color: var(--bg-secondary);
+}
+</style>

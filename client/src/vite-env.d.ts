@@ -27,6 +27,7 @@ export interface INodePathAPI {
     dirname: (p: string) => string
     basename: (p: string, ext?: string) => string
     normalize: (p: string) => string
+    normalizeDisplay: (p: string) => string
 }
 
 export interface ITerminalAPI {
@@ -55,6 +56,8 @@ declare global {
         cwd: {
             setCwd(cwd: string): void
             getCwd(): Promise<string>
+            setDisplayCwd(cwd: string): void
+            getDisplayCwd(): Promise<string>
         }
         require?: NodeRequire
     }

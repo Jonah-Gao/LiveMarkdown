@@ -1,25 +1,25 @@
 ﻿import {ITheme} from "@xterm/xterm";
 
 export const theme: ITheme = {
-    "black": "#000000",
-    "red": "#f78166",
-    "green": "#56d364",
-    "yellow": "#e3b341",
-    "blue": "#6ca4f8",
-    "magenta": "#db61a2",
-    "cyan": "#2b7489",
-    "white": "#ffffff",
-    "brightBlack": "#4d4d4d",
-    "brightRed": "#f78166",
+    "black": "#484f58",
+    "red": "#ff7b72",
+    "green": "#3fb950",
+    "yellow": "#d29922",
+    "blue": "#58a6ff",
+    "magenta": "#bc8cff",
+    "cyan": "#39c5cf",
+    "white": "#b1bac4",
+    "brightBlack": "#6e7681",
+    "brightRed": "#ffa198",
     "brightGreen": "#56d364",
     "brightYellow": "#e3b341",
-    "brightBlue": "#6ca4f8",
-    "brightMagenta": "#db61a2",
-    "brightCyan": "#2b7489",
+    "brightBlue": "#79c0ff",
+    "brightMagenta": "#d2a8ff",
+    "brightCyan": "#56d4dd",
     "brightWhite": "#ffffff",
-    "background": "#101216",
-    "foreground": "#8b949e",
+    "background": "#010409",
+    "foreground": "#e6edf3",
     "selectionBackground": "#3b5070",
-    "cursorAccent": "#c9d1d9"
+    "cursorAccent": "#e6edf3"
 }
 

@@ -57,7 +57,7 @@ async function confirmOpen() {
 async function confirmCreate() {
     const dirPath = newDirPath.value.trim()
     const projectName = newProjectName.value.trim()
-    const directoryPath = window.nodePath.join(dirPath, projectName)
+    const directoryPath = window.nodePath.normalizeDisplay(window.nodePath.join(dirPath, projectName))
     const venvPath = window.nodePath.join(directoryPath, '.venv')
     if (!directoryPath) return
     try {

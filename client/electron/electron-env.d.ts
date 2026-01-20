@@ -30,6 +30,8 @@ declare global {
             join: (...args: string[]) => string
             dirname: (p: string) => string
             basename: (p: string, ext?: string) => string
+            normalize: (p: string) => string
+            normalizeDisplay: (p: string) => string
         }
         windowControls: {
             minimize(): void

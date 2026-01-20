@@ -24,6 +24,9 @@ const MAX_TERMINAL_HEIGHT = 900
 const MIN_PREVIEW_RATIO = 0.15
 const MAX_PREVIEW_RATIO = 0.85
 
+// Auto-save interval in milliseconds (60 seconds)
+const AUTO_SAVE_INTERVAL = 60 * 1000
+
 // Language detection by file extension
 const LANGUAGE_BY_EXTENSION: Record<string, string> = {
     '.ts': 'Typescript',
@@ -79,6 +82,7 @@ const DEFAULT_LAYOUT_STATE: PanelLayout = {
     editorPreviewRatio: 0.5,
     preferredViewMode: 'split',
     explorerVisible: true,
+    searchVisible: false,
     terminalVisible: false,
     activeTopPanel: 'explorer',
     activeBottomPanel: null,
@@ -107,6 +111,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
 
     // Workspace state
     const rootDirectory = ref(DEFAULT_ROOT_DIRECTORY)
+    const displayRootDirectory = ref(DEFAULT_ROOT_DIRECTORY) // Original case for display
     const projectName = ref('')
     const pythonInterpreterPath = ref('')
 
@@ -125,16 +130,29 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     // File watcher cleanup function
     let fileWatcherCleanup: (() => void) | null = null
 
+    // Auto-save timer
+    let autoSaveTimer: ReturnType<typeof setInterval> | null = null
+
     // Computed: workspace state
     const hasWorkspace = computed(() => !!rootDirectory.value)
     const hasTabs = computed(() => tabs.value.length > 0)
 
+    /**
+     * Sort children: folders first, then files, alphabetically within each group.
+     */
+    function sortChildren(children: UIFileNode[]): UIFileNode[] {
+        return children.slice().sort((a, b) => {
+            if (a.isDirectory !== b.isDirectory) {
+                return a.isDirectory ? -1 : 1
+            }
+            return a.name.localeCompare(b.name, undefined, {sensitivity: 'base'})
+        })
+    }
+
     // Computed: build visible file tree from flat node map
     const visibleFileTree = computed<UIFileNode[]>(() => {
         nodeVersion.value
-        console.log(rootDirectory.value)
         if (!rootDirectory.value) {
-            console.log('No root directory set, returning empty file tree.')
             return []
         }
 
@@ -142,23 +160,26 @@ export const useWorkspaceStore = defineStore('workspace', () => {
             const node = nodes.get(path)
             if (!node) return null
 
+            const children = node.expanded
+                ? sortChildren(
+                    node.children
+                        .map(p => build(p))
+                        .filter(Boolean) as UIFileNode[]
+                )
+                : []
+
             return {
                 name: node.name,
                 path: node.path,
+                displayPath: node.displayPath,
                 extension: node.extension,
                 isDirectory: node.isDirectory,
                 expanded: node.expanded,
-                children: node.expanded
-                    ? node.children
-                        .map(p => build(p))
-                        .filter(Boolean) as UIFileNode[]
-                    : []
+                children
             }
         }
 
         const root = build(rootDirectory.value)
-        console.log('Building visible file tree...')
-        console.log(root)
         return root ? [root] : []
     })
 
@@ -178,6 +199,10 @@ export const useWorkspaceStore = defineStore('workspace', () => {
         hasWorkspace.value &&
         layoutState.activeTopPanel === 'explorer' &&
         layoutState.explorerVisible
+    )
+    const showSearch = computed(() =>
+        hasWorkspace.value &&
+        layoutState.activeTopPanel === 'search' && layoutState.searchVisible
     )
     const showTerminal = computed(() =>
         hasWorkspace.value &&
@@ -264,15 +289,18 @@ export const useWorkspaceStore = defineStore('workspace', () => {
 
         if (layoutState.activeTopPanel === panel) {
             // Toggle visibility for explorer panel
+            layoutState.activeTopPanel = null
             if (panel === 'explorer') {
-                layoutState.explorerVisible = !layoutState.explorerVisible
+                layoutState.explorerVisible = false
             } else {
-                layoutState.activeTopPanel = null
+                layoutState.searchVisible = false
             }
         } else {
             layoutState.activeTopPanel = panel
             if (panel === 'explorer') {
                 layoutState.explorerVisible = true
+            } else {
+                layoutState.searchVisible = true
             }
         }
     }
@@ -326,8 +354,13 @@ export const useWorkspaceStore = defineStore('workspace', () => {
      */
     async function closeTab(tab: Tab): Promise<void> {
         if (tab.isDirty) {
-            await saveTabAsync(tab.path, tab.content)
-            tab.isDirty = false
+            try {
+                await saveTabAsync(tab.path, tab.content)
+                tab.isDirty = false
+            } catch (err) {
+                console.error('Failed to save tab before closing:', tab.path, err)
+                // Still close the tab even if save failed
+            }
         }
 
         const index = tabs.value.findIndex(t => t.id === tab.id)
@@ -357,8 +390,36 @@ export const useWorkspaceStore = defineStore('workspace', () => {
      */
     async function saveDirtyTabs(): Promise<void> {
         for (const tab of tabs.value.filter((t: Tab): boolean => t.isDirty)) {
-            await saveTabAsync(tab.path, tab.content)
-            tab.isDirty = false
+            try {
+                await saveTabAsync(tab.path, tab.content)
+                tab.isDirty = false
+            } catch (err) {
+                console.error('Failed to save tab:', tab.path, err)
+            }
+        }
+    }
+
+    /**
+     * Start the auto-save timer (60 second interval).
+     */
+    function startAutoSave(): void {
+        stopAutoSave()
+        autoSaveTimer = setInterval(async () => {
+            try {
+                await saveDirtyTabs()
+            } catch (err) {
+                console.error('Auto-save failed:', err)
+            }
+        }, AUTO_SAVE_INTERVAL)
+    }
+
+    /**
+     * Stop the auto-save timer.
+     */
+    function stopAutoSave(): void {
+        if (autoSaveTimer) {
+            clearInterval(autoSaveTimer)
+            autoSaveTimer = null
         }
     }
 
@@ -458,14 +519,25 @@ export const useWorkspaceStore = defineStore('workspace', () => {
 
     /**
      * Read directory contents recursively via streaming.
+     * Preserves the expanded state of existing nodes during updates.
      */
     async function readDirAsync(directoryPath: string, targetMap: Map<string, FileNode>): Promise<void> {
         const normalizedDir = window.nodePath.normalize(directoryPath)
+        const displayDir = window.nodePath.normalizeDisplay(directoryPath)
         const tempMap = new Map<string, FileNode>()
-        if (targetMap.has(normalizedDir)){
-            tempMap.set(normalizedDir, {...targetMap.get(normalizedDir)!, children: []})
+
+        // Preserve expanded state from existing nodes
+        const expandedPaths = new Set<string>()
+        for (const [path, node] of targetMap.entries()) {
+            if (node.isDirectory && node.expanded) {
+                expandedPaths.add(path)
+            }
         }
-        const pendingChildren = new Map<string, string[]>();
+
+        if (targetMap.has(normalizedDir)) {
+            tempMap.set(normalizedDir, {...targetMap.get(normalizedDir)!, displayPath: displayDir, children: []})
+        }
+        const pendingChildren = new Map<string, string[]>()
 
         const observable = await readDirectory(normalizedDir)
 
@@ -473,12 +545,21 @@ export const useWorkspaceStore = defineStore('workspace', () => {
             observable.subscribe({
                 next: (node) => {
                     const normalizedPath = window.nodePath.normalize(node.path)
+                    const displayPath = window.nodePath.normalizeDisplay(node.path)
                     const normalizedParentPath = node.parentPath ? window.nodePath.normalize(node.parentPath) : null
-                    const normalizedNode = {
-                        ...node,
+
+                    // Preserve expanded state if the node previously existed
+                    const wasExpanded = expandedPaths.has(normalizedPath)
+
+                    // Destructure to exclude properties we're overriding
+                    const {path: _, parentPath: __, children: ___, expanded: ____, ...restNode} = node
+                    const normalizedNode: FileNode = {
+                        ...restNode,
                         path: normalizedPath,
+                        displayPath: displayPath,
                         parentPath: normalizedParentPath,
-                        children: []
+                        children: [],
+                        expanded: wasExpanded
                     }
 
                     tempMap.set(normalizedPath, normalizedNode)
@@ -503,10 +584,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
                     }
                 },
                 complete: () => resolve(),
-                error: (err) => {
-                    console.error('Failed to load', normalizedDir, err)
-                    reject(err)
-                }
+                error: (err) => reject(err)
             })
         })
         removeSubNodes(normalizedDir, targetMap)
@@ -514,7 +592,6 @@ export const useWorkspaceStore = defineStore('workspace', () => {
             targetMap.set(path, node)
         }
         nodeVersion.value++
-        console.log(targetMap)
     }
 
     function removeSubNodes(dirPath: string, targetMap: Map<string, FileNode>): void {
@@ -530,7 +607,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
      * Stream file content into a tab via streaming.
      */
     async function streamTabAsync(filePath: string): Promise<void> {
-        const normalizedPath = window.nodePath.normalize(filePath)
+        const normalizedPath = window.nodePath.normalizeDisplay(filePath)
         const observable = await streamTab(normalizedPath)
         return new Promise((resolve, reject) => {
             observable.subscribe({
@@ -577,12 +654,13 @@ export const useWorkspaceStore = defineStore('workspace', () => {
 
         const nodePath = window.nodePath
         const rootName = nodePath?.basename
-            ? nodePath.basename(rootDirectory.value)
-            : rootDirectory.value
+            ? nodePath.basename(displayRootDirectory.value)
+            : displayRootDirectory.value
 
         nodes.set(rootDirectory.value, {
             name: rootName,
             path: rootDirectory.value,
+            displayPath: displayRootDirectory.value,
             extension: '',
             parentPath: null,
             isDirectory: true,
@@ -676,6 +754,39 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     }
 
     /**
+     * Search files by name using the nodes Map.
+     * Returns files that match the query (case-insensitive).
+     */
+    function searchFiles(query: string): UIFileNode[] {
+        if (!query.trim()) return []
+
+        const lowerQuery = query.toLowerCase()
+        const results: UIFileNode[] = []
+
+        for (const [, node] of nodes) {
+            if (!node.isDirectory && node.name.toLowerCase().includes(lowerQuery)) {
+                results.push({
+                    name: node.name,
+                    path: node.path,
+                    displayPath: node.displayPath,
+                    extension: node.extension,
+                    isDirectory: node.isDirectory,
+                    expanded: false,
+                    children: []
+                })
+            }
+        }
+
+        // Sort results: exact matches first, then alphabetically
+        return results.sort((a, b) => {
+            const aExact = a.name.toLowerCase() === lowerQuery
+            const bExact = b.name.toLowerCase() === lowerQuery
+            if (aExact !== bExact) return aExact ? -1 : 1
+            return a.name.localeCompare(b.name, undefined, {sensitivity: 'base'})
+        })
+    }
+
+    /**
      * Open a file in a new or existing tab.
      */
     async function openFile(node: UIFileNode): Promise<void> {
@@ -686,7 +797,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
             if (existingTab) {
                 openTab(existingTab)
             } else {
-                await streamTabAsync(node.path)
+                await streamTabAsync(node.displayPath)
             }
         } catch (err) {
             console.error('Error opening file:', err)
@@ -707,17 +818,34 @@ export const useWorkspaceStore = defineStore('workspace', () => {
      * Set the workspace root directory and load file tree.
      */
     async function setWorkspaceDirectory(directoryPath: string): Promise<void> {
-        // Stop previous file watcher
-        await stopFileWatcher()
+        // Stop previous file watcher and auto-save
+        try {
+            await stopFileWatcher()
+        } catch (err) {
+            console.error('Failed to stop file watcher:', err)
+        }
+        stopAutoSave()
 
         nodes.clear()
         fileTree.value = []
-        rootDirectory.value = window.nodePath.normalize(directoryPath.trim())
+        const trimmedPath = directoryPath.trim()
+        rootDirectory.value = window.nodePath.normalize(trimmedPath)
+        displayRootDirectory.value = window.nodePath.normalizeDisplay(trimmedPath)
         if (!rootDirectory.value) return
-        await loadFileTree()
 
-        // Start file watcher for the new directory
-        await startFileWatcher()
+        try {
+            await loadFileTree()
+        } catch (err) {
+            console.error('Failed to load file tree:', err)
+        }
+
+        // Start file watcher and auto-save for the new directory
+        try {
+            await startFileWatcher()
+        } catch (err) {
+            console.error('Failed to start file watcher:', err)
+        }
+        startAutoSave()
     }
 
     /**
@@ -745,38 +873,52 @@ export const useWorkspaceStore = defineStore('workspace', () => {
      * Save workspace settings to disk.
      */
     async function saveWorkspaceSettings(): Promise<void> {
-        await saveWorkspaceSettingsAsync(rootDirectory.value, layoutState)
+        try {
+            await saveWorkspaceSettingsAsync(rootDirectory.value, layoutState)
+        } catch (err) {
+            console.error('Failed to save workspace settings:', err)
+        }
     }
 
     /**
      * Load workspace settings from disk and restore state.
      */
     async function loadWorkspaceSettings(): Promise<void> {
-        const settings = await loadLayoutAsync(rootDirectory.value)
-        if (settings) {
-            // Restore layout dimensions
-            layoutState.explorerWidth = settings.explorerWidth
-            layoutState.terminalHeight = settings.terminalHeight
-            layoutState.editorPreviewRatio = settings.editorPreviewRatio
-            layoutState.preferredViewMode = settings.preferredViewMode
+        try {
+            const settings = await loadLayoutAsync(rootDirectory.value)
+            if (settings) {
+                // Restore layout dimensions
+                layoutState.explorerWidth = settings.explorerWidth
+                layoutState.terminalHeight = settings.terminalHeight
+                layoutState.editorPreviewRatio = settings.editorPreviewRatio
+                layoutState.preferredViewMode = settings.preferredViewMode
 
-            // Restore panel visibility state
-            layoutState.explorerVisible = settings.explorerVisible ?? true
-            layoutState.terminalVisible = settings.terminalVisible ?? false
-            layoutState.activeTopPanel = settings.activeTopPanel ?? 'explorer'
-            layoutState.activeBottomPanel = settings.activeBottomPanel ?? null
+                // Restore panel visibility state
+                layoutState.explorerVisible = settings.explorerVisible ?? true
+                layoutState.terminalVisible = settings.terminalVisible ?? false
+                layoutState.activeTopPanel = settings.activeTopPanel ?? 'explorer'
+                layoutState.activeBottomPanel = settings.activeBottomPanel ?? null
 
-            // Restore opened files
-            layoutState.openedFiles = (settings.openedFiles ?? []).map(window.nodePath.normalize)
-            await openWorkspace(rootDirectory.value)
-            for (const filePath of layoutState.openedFiles) {
-                await streamTabAsync(filePath)
+                // Restore opened files
+                layoutState.openedFiles = (settings.openedFiles ?? []).map(window.nodePath.normalize)
+                await openWorkspace(rootDirectory.value)
+                for (const filePath of layoutState.openedFiles) {
+                    try {
+                        await streamTabAsync(filePath)
+                    } catch (err) {
+                        console.error('Failed to restore tab:', filePath, err)
+                    }
+                }
+
+                // Restore active file
+                layoutState.activeFile = window.nodePath.normalize(settings.activeFile ?? '')
+                const activeTab = tabs.value.find(t => t.path === layoutState.activeFile) || tabs.value[0]
+                if (activeTab) {
+                    openTab(activeTab)
+                }
             }
-
-            // Restore active file
-            layoutState.activeFile = window.nodePath.normalize(settings.activeFile ?? '')
-            const activeTab = tabs.value.find(t => t.path === layoutState.activeFile) || tabs.value[0]
-            openTab(activeTab)
+        } catch (err) {
+            console.error('Failed to load workspace settings:', err)
         }
     }
 
@@ -790,6 +932,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
         fileTree,
         nodes,
         rootDirectory,
+        displayRootDirectory,
         projectName,
         pythonInterpreterPath,
         resizeState,
@@ -808,6 +951,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
         activeTab,
         isMarkdownTab,
         showExplorer,
+        showSearch,
         showTerminal,
         showPreviewPane,
         showCodePane,
@@ -832,6 +976,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
         loadFileTree,
         toggleFolder,
         openFile,
+        searchFiles,
         saveDirtyTabs,
         applyViewModeForActiveTab,
         resetTabs,
@@ -844,6 +989,10 @@ export const useWorkspaceStore = defineStore('workspace', () => {
         // File watcher actions
         startFileWatcher,
         stopFileWatcher,
-        handleFileChange
+        handleFileChange,
+
+        // Auto-save actions
+        startAutoSave,
+        stopAutoSave
     }
 })

@@ -46,12 +46,14 @@ process.env.VITE_PUBLIC = PUBLIC_PATH
 
 interface StoreSchema {
     lastCwd?: string
+    lastDisplayCwd?: string
 }
 
 const store = new Store<StoreSchema>({
     name: 'config',
     defaults: {
-        lastCwd: undefined
+        lastCwd: undefined,
+        lastDisplayCwd: undefined
     }
 })
 
@@ -182,29 +184,25 @@ ipcMain.on('cwd:set', (_, cwd: string) => {
     store.set('lastCwd', cwd)
 })
 
+ipcMain.handle('cwd:get-display', () => {
+    return store.get('lastDisplayCwd')
+})
+
+ipcMain.on('cwd:set-display', (_, cwd: string) => {
+    store.set('lastDisplayCwd', cwd)
+})
+
 // =============================================================================
 // Application Lifecycle
 // =============================================================================
 
 /**
- * Quit when all windows are closed (except on macOS).
- * On macOS, apps typically stay active until explicitly quit with Cmd+Q.
+ * Quit when all windows are closed.
+ * Windows-only application - always quit when window is closed.
  */
 app.on('window-all-closed', () => {
-    if (process.platform !== 'darwin') {
-        app.quit()
-        mainWindow = null
-    }
-})
-
-/**
- * Re-create window when dock icon is clicked (macOS).
- * This is the standard macOS behavior for apps without open windows.
- */
-app.on('activate', async () => {
-    if (BrowserWindow.getAllWindows().length === 0) {
-        await createMainWindow()
-    }
+    app.quit()
+    mainWindow = null
 })
 
 /**

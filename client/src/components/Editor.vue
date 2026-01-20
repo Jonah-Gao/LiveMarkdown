@@ -26,3 +26,23 @@ const EDITOR_OPTIONS = {
         />
     </div>
 </template>
+
+<style scoped>
+.editor-main {
+    display: flex;
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+}
+
+.code-editor {
+    width: 100%;
+    height: 100%;
+    min-width: 0;
+}
+
+.editor-main :deep(.monaco-editor),
+.editor-main :deep(.monaco-editor .overflow-guard) {
+    max-width: 100%;
+}
+</style>

@@ -79,6 +79,7 @@ public class FileService(ILogger<FileService> logger)
         string[] OpenedFiles,
         string ActiveFile = "",
         bool ExplorerVisible = true,
+        bool SearchVisible = false,
         bool TerminalVisible = false,
         SidebarPanel? ActiveTopPanel = SidebarPanel.Explorer,
         SidebarPanel? ActiveBottomPanel = null
