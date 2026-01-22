@@ -138,22 +138,33 @@ body {
 /* ===========================================
    SIDEBAR & TOOLBAR
    =========================================== */
-.view-content {
-    display: block;
-    width: 240px;
+.sidebar-panel {
+    display: flex;
+    flex-direction: column;
     min-width: 160px;
     flex-shrink: 0;
-    border-right: 1px solid var(--widget-border-color);
     background-color: var(--bg-tertiary);
-    transition: width var(--transition-normal);
+    overflow: hidden;
+}
+
+.view-content {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    height: 100%;
+    flex-shrink: 0;
+    background-color: var(--bg-tertiary);
 }
 
 .vertical-resizer {
     position: relative;
-    width: 12px;
-    cursor: col-resize;
+    width: 8px;
+    cursor: ew-resize;
     background-color: transparent;
     flex-shrink: 0;
+    z-index: 10;
+    margin-left: -4px;
+    margin-right: -4px;
 }
 
 .vertical-resizer::after {
@@ -162,14 +173,9 @@ body {
     top: 0;
     bottom: 0;
     left: 50%;
-    width: 2px;
+    width: 1px;
     transform: translateX(-50%);
     background-color: var(--widget-border-color);
-    border-radius: 2px;
-}
-
-.vertical-resizer:hover::after {
-    background-color: rgba(255, 255, 255, 0.2);
 }
 
 .tool-bar {
@@ -262,7 +268,7 @@ body {
     padding: 0 8px 0 14px;
     cursor: default;
     user-select: none;
-    border-bottom: 1px solid var(--widget-border-color);
+    /*border-bottom: 1px solid var(--widget-border-color);*/
     background-color: var(--bg-tertiary);
 }
 
@@ -381,9 +387,12 @@ button.primary:hover {
 
 .split-resizer {
     position: relative;
-    width: 12px;
-    cursor: col-resize;
+    width: 8px;
+    cursor: ew-resize;
     background-color: transparent;
+    z-index: 10;
+    margin-left: -4px;
+    margin-right: -4px;
 }
 
 .split-resizer::after {
@@ -392,14 +401,9 @@ button.primary:hover {
     top: 0;
     bottom: 0;
     left: 50%;
-    width: 2px;
+    width: 1px;
     transform: translateX(-50%);
     background-color: var(--widget-border-color);
-    border-radius: 2px;
-}
-
-.split-resizer:hover::after {
-    background-color: rgba(255, 255, 255, 0.2);
 }
 
 /* ===========================================
@@ -408,10 +412,13 @@ button.primary:hover {
 
 .horizontal-resizer {
     position: relative;
-    height: 12px;
-    cursor: row-resize;
+    height: 8px;
+    cursor: ns-resize;
     background-color: transparent;
     flex-shrink: 0;
+    z-index: 10;
+    margin-top: -4px;
+    margin-bottom: -4px;
 }
 
 .horizontal-resizer::after {
@@ -420,13 +427,9 @@ button.primary:hover {
     left: 0;
     right: 0;
     top: 50%;
-    height: 2px;
+    height: 1px;
     transform: translateY(-50%);
     background-color: var(--widget-border-color);
-}
-
-.horizontal-resizer:hover::after {
-    background-color: rgba(255, 255, 255, 0.2);
 }
 
 .terminal-host .xterm {

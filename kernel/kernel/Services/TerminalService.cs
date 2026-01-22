@@ -27,11 +27,12 @@ public class TerminalService(ILogger<TerminalService> logger, IHubContext<Termin
     /// <summary>
     /// Start a terminal session for a client.
     /// </summary>
+    /// <param name="terminalId">Terminal instance ID</param>
     /// <param name="connectionId">SignalR connection ID</param>
     /// <param name="outputRoute">SignalR client method name to invoke with output</param>
     /// <param name="cwd">Working directory for the terminal</param>
     /// <param name="commandLine">Optional arguments passed to the shell executable</param>
-    public async Task StartTerminalAsync(string connectionId, string outputRoute, string cwd,
+    public async Task StartTerminalAsync(string terminalId, string connectionId, string outputRoute, string cwd,
         string[]? commandLine = null)
     {
         var shell = RuntimeInformation.IsOSPlatform(OSPlatform.Windows) ? "powershell.exe" : "bash";
@@ -47,17 +48,17 @@ public class TerminalService(ILogger<TerminalService> logger, IHubContext<Termin
             Environment = new Dictionary<string, string>()
         };
 
-        using (logger.BeginScope(new Dictionary<string, object> { ["ConnectionId"] = connectionId }))
+        using (logger.BeginScope(new Dictionary<string, object> { ["TerminalId"] = terminalId }))
         {
-            logger.LogInformation("Starting terminal for connection {ConnectionId} (shell={Shell}, cwd={Cwd})",
-                LogFormatter.ToCyan(connectionId), LogFormatter.ToYellow(shell), LogFormatter.ToGreen(options.Cwd));
+            logger.LogInformation("Starting terminal for connection {TerminalId} (shell={Shell}, cwd={Cwd})",
+                LogFormatter.ToCyan(terminalId), LogFormatter.ToYellow(shell), LogFormatter.ToGreen(options.Cwd));
 
             try
             {
                 var terminal = await PtyProvider.SpawnAsync(options, CancellationToken.None);
-                _terminals.TryAdd(connectionId, terminal);
+                _terminals.TryAdd(terminalId, terminal);
                 var cts = new CancellationTokenSource();
-                _cts.TryAdd(connectionId, cts);
+                _cts.TryAdd(terminalId, cts);
 
                 // Start background task to read terminal output and relay to client
                 _ = Task.Run(async () =>
@@ -73,8 +74,8 @@ public class TerminalService(ILogger<TerminalService> logger, IHubContext<Termin
 
                             var output = Encoding.UTF8.GetString(buffer, 0, bytesRead);
                             logger.LogDebug(
-                                "[Terminal {ConnectionId}, Output Route {OutputRoute}] Output: {Output}",
-                                LogFormatter.ToCyan(connectionId), LogFormatter.ToMagenta(outputRoute),
+                                "[Terminal {TerminalId}, Output Route {OutputRoute}] Output: {Output}",
+                                LogFormatter.ToCyan(terminalId), LogFormatter.ToMagenta(outputRoute),
                                 LogFormatter.ToGreen(output));
                             await hubContext.Clients.Client(connectionId)
                                 .SendAsync(outputRoute, output, cancellationToken: cts.Token);
@@ -82,27 +83,27 @@ public class TerminalService(ILogger<TerminalService> logger, IHubContext<Termin
                     }
                     catch (OperationCanceledException)
                     {
-                        logger.LogDebug("Read loop cancelled for connection {ConnectionId}",
-                            LogFormatter.ToCyan(connectionId));
+                        logger.LogDebug("Read loop cancelled for connection {TerminalId}",
+                            LogFormatter.ToCyan(terminalId));
                     }
                     catch (Exception ex)
                     {
-                        logger.LogError(ex, "Unexpected error reading from PTY for connection {ConnectionId}",
-                            LogFormatter.ToBrightRed(connectionId));
+                        logger.LogError(ex, "Unexpected error reading from PTY for connection {TerminalId}",
+                            LogFormatter.ToBrightRed(terminalId));
                     }
                     finally
                     {
                         logger.LogInformation(
-                            "Terminal read loop ended for connection {ConnectionId}, performing cleanup",
-                            LogFormatter.ToCyan(connectionId));
-                        KillTerminal(connectionId);
+                            "Terminal read loop ended for connection {TerminalId}, performing cleanup",
+                            LogFormatter.ToCyan(terminalId));
+                        KillTerminal(terminalId);
                     }
                 }, cts.Token);
             }
             catch (Exception ex)
             {
-                logger.LogError(ex, "Failed to spawn terminal for connection {ConnectionId}",
-                    LogFormatter.ToBrightRed(connectionId));
+                logger.LogError(ex, "Failed to spawn terminal for connection {TerminalId}",
+                    LogFormatter.ToBrightRed(terminalId));
                 throw;
             }
         }
@@ -132,39 +133,46 @@ public class TerminalService(ILogger<TerminalService> logger, IHubContext<Termin
     /// <summary>
     /// Resize a terminal (columns x rows).
     /// </summary>
-    public void Resize(string connectionId, int cols, int rows)
+    public void Resize(string terminalId, int cols, int rows)
     {
-        if (_terminals.TryGetValue(connectionId, out var terminal))
+        if (_terminals.TryGetValue(terminalId, out var terminal))
         {
             logger.LogInformation("Resizing terminal {ConnectionId} to {Cols}x{Rows}",
-                LogFormatter.ToCyan(connectionId), LogFormatter.ToYellow(cols), LogFormatter.ToYellow(rows));
+                LogFormatter.ToCyan(terminalId), LogFormatter.ToYellow(cols), LogFormatter.ToYellow(rows));
             terminal.Resize(cols, rows);
         }
         else
         {
             logger.LogWarning("Resize requested for unknown terminal {ConnectionId}",
-                LogFormatter.ToBrightRed(connectionId));
+                LogFormatter.ToBrightRed(terminalId));
         }
     }
 
     /// <summary>
     /// Kill a terminal and clean up resources.
     /// </summary>
-    public void KillTerminal(string connectionId)
+    public void KillTerminal(string terminalId)
     {
-        if (_terminals.TryRemove(connectionId, out var terminal))
+        try
         {
-            logger.LogInformation("Disposing terminal for connection {ConnectionId}",
-                LogFormatter.ToCyan(connectionId));
-            terminal.Dispose();
-        }
+            if (_terminals.TryRemove(terminalId, out var terminal))
+            {
+                logger.LogInformation("Disposing terminal for connection {ConnectionId}",
+                    LogFormatter.ToCyan(terminalId));
+                terminal.Dispose();
+            }
 
-        if (_cts.TryRemove(connectionId, out var cts))
+            if (_cts.TryRemove(terminalId, out var cts))
+            {
+                logger.LogInformation("Cancelling read loop for connection {ConnectionId}",
+                    LogFormatter.ToCyan(terminalId));
+                cts.Cancel();
+                cts.Dispose();
+            }
+        }
+        catch (Exception ex)
         {
-            logger.LogInformation("Cancelling read loop for connection {ConnectionId}",
-                LogFormatter.ToCyan(connectionId));
-            cts.Cancel();
-            cts.Dispose();
+            logger.LogError(ex, "Error while killing terminal {TerminalId}",terminalId);
         }
     }
 }

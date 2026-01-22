@@ -285,6 +285,240 @@ public class FileService(ILogger<FileService> logger)
         }
     }
 
+    public void CreateFile(string filePath)
+    {
+        if (string.IsNullOrWhiteSpace(filePath))
+        {
+            logger.LogError("Invalid file path: {FilePath}", LogFormatter.ToBrightRed(filePath));
+            return;
+        }
+
+        // Normalize and validate path
+        var fullPath = Path.GetFullPath(filePath);
+        try
+        {
+            using var fs = File.Create(fullPath);
+            logger.LogInformation("File created: {FilePath}", LogFormatter.ToGreen(fullPath));
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Error creating file: {FilePath}", LogFormatter.ToBrightRed(fullPath));
+        }
+    }
+
+    public void DeleteFile(string filePath)
+    {
+        if (string.IsNullOrWhiteSpace(filePath))
+        {
+            logger.LogError("Invalid file path: {FilePath}", LogFormatter.ToBrightRed(filePath));
+            return;
+        }
+
+        // Normalize and validate path
+        var fullPath = Path.GetFullPath(filePath);
+        try
+        {
+            if (File.Exists(fullPath))
+            {
+                File.Delete(fullPath);
+                logger.LogInformation("File deleted: {FilePath}", LogFormatter.ToGreen(fullPath));
+            }
+            else
+            {
+                logger.LogWarning("File does not exist: {FilePath}", LogFormatter.ToBrightRed(fullPath));
+            }
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Error deleting file: {FilePath}", LogFormatter.ToBrightRed(fullPath));
+        }
+    }
+
+    public void DeleteDirectory(string dirPath)
+    {
+        if (string.IsNullOrWhiteSpace(dirPath))
+        {
+            logger.LogError("Invalid directory path: {DirPath}", LogFormatter.ToBrightRed(dirPath));
+            return;
+        }
+
+        // Normalize and validate path
+        var fullPath = Path.GetFullPath(dirPath);
+        try
+        {
+            if (Directory.Exists(fullPath))
+            {
+                Directory.Delete(fullPath, recursive: true);
+                logger.LogInformation("Directory deleted: {DirPath}", LogFormatter.ToGreen(fullPath));
+            }
+            else
+            {
+                logger.LogWarning("Directory does not exist: {DirPath}", LogFormatter.ToBrightRed(fullPath));
+            }
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Error deleting directory: {DirPath}", LogFormatter.ToBrightRed(fullPath));
+        }
+    }
+
+    public void MoveFile(string oldFilePath, string newFilePath)
+    {
+        if (string.IsNullOrWhiteSpace(oldFilePath) || string.IsNullOrWhiteSpace(newFilePath))
+        {
+            logger.LogError("Invalid file paths: {OldFilePath}, {NewFilePath}",
+                LogFormatter.ToBrightRed(oldFilePath),
+                LogFormatter.ToBrightRed(newFilePath));
+            return;
+        }
+
+        // Normalize and validate paths
+        var fullOldPath = Path.GetFullPath(oldFilePath);
+        var fullNewPath = Path.GetFullPath(newFilePath);
+        try
+        {
+            if (File.Exists(fullOldPath))
+            {
+                File.Move(fullOldPath, fullNewPath);
+                logger.LogInformation("File renamed from {OldFilePath} to {NewFilePath}",
+                    LogFormatter.ToGreen(fullOldPath),
+                    LogFormatter.ToGreen(fullNewPath));
+            }
+            else
+            {
+                logger.LogWarning("Source file does not exist: {OldFilePath}", LogFormatter.ToBrightRed(fullOldPath));
+            }
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Error renaming file from {OldFilePath} to {NewFilePath}",
+                LogFormatter.ToBrightRed(fullOldPath),
+                LogFormatter.ToBrightRed(fullNewPath));
+        }
+    }
+    
+    public void MoveDirectory(string oldFilePath, string newFilePath)
+    {
+        if (string.IsNullOrWhiteSpace(oldFilePath) || string.IsNullOrWhiteSpace(newFilePath))
+        {
+            logger.LogError("Invalid directory paths: {OldDirPath}, {NewDirPath}",
+                LogFormatter.ToBrightRed(oldFilePath),
+                LogFormatter.ToBrightRed(newFilePath));
+            return;
+        }
+
+        // Normalize and validate paths
+        var fullOldPath = Path.GetFullPath(oldFilePath);
+        var fullNewPath = Path.GetFullPath(newFilePath);
+        try
+        {
+            if (Directory.Exists(fullOldPath))
+            {
+                Directory.Move(fullOldPath, fullNewPath);
+                logger.LogInformation("Directory renamed from {OldDirPath} to {NewDirPath}",
+                    LogFormatter.ToGreen(fullOldPath),
+                    LogFormatter.ToGreen(fullNewPath));
+            }
+            else
+            {
+                logger.LogWarning("Source directory does not exist: {OldDirPath}", LogFormatter.ToBrightRed(fullOldPath));
+            }
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Error renaming directory from {OldDirPath} to {NewDirPath}",
+                LogFormatter.ToBrightRed(fullOldPath),
+                LogFormatter.ToBrightRed(fullNewPath));
+        }
+    }
+
+    public void CopyFile(string oldFilePath, string newFilePath)
+    {
+        if (string.IsNullOrWhiteSpace(oldFilePath) || string.IsNullOrWhiteSpace(newFilePath))
+        {
+            logger.LogError("Invalid file paths: {OldFilePath}, {NewFilePath}",
+                LogFormatter.ToBrightRed(oldFilePath),
+                LogFormatter.ToBrightRed(newFilePath));
+            return;
+        }
+
+        // Normalize and validate paths
+        var fullOldPath = Path.GetFullPath(oldFilePath);
+        var fullNewPath = Path.GetFullPath(newFilePath);
+        try
+        {
+            if (File.Exists(fullOldPath))
+            {
+                File.Copy(fullOldPath, fullNewPath, overwrite: false);
+                logger.LogInformation("File copied from {OldFilePath} to {NewFilePath}",
+                    LogFormatter.ToGreen(fullOldPath),
+                    LogFormatter.ToGreen(fullNewPath));
+            }
+            else
+            {
+                logger.LogWarning("Source file does not exist: {OldFilePath}", LogFormatter.ToBrightRed(fullOldPath));
+            }
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Error copying file from {OldFilePath} to {NewFilePath}",
+                LogFormatter.ToBrightRed(fullOldPath),
+                LogFormatter.ToBrightRed(fullNewPath));
+        }
+    }
+    
+    public void CopyDirectory(string oldDirPath, string newDirPath)
+    {
+        if (string.IsNullOrWhiteSpace(oldDirPath) || string.IsNullOrWhiteSpace(newDirPath))
+        {
+            logger.LogError("Invalid directory paths: {OldDirPath}, {NewDirPath}",
+                LogFormatter.ToBrightRed(oldDirPath),
+                LogFormatter.ToBrightRed(newDirPath));
+            return;
+        }
+
+        // Normalize and validate paths
+        var fullOldPath = Path.GetFullPath(oldDirPath);
+        var fullNewPath = Path.GetFullPath(newDirPath);
+        try
+        {
+            if (Directory.Exists(fullOldPath))
+            {
+                CopyDirectoryRecursive(fullOldPath, fullNewPath);
+                logger.LogInformation("Directory copied from {OldDirPath} to {NewDirPath}",
+                    LogFormatter.ToGreen(fullOldPath),
+                    LogFormatter.ToGreen(fullNewPath));
+            }
+            else
+            {
+                logger.LogWarning("Source directory does not exist: {OldDirPath}", LogFormatter.ToBrightRed(fullOldPath));
+            }
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Error copying directory from {OldDirPath} to {NewDirPath}",
+                LogFormatter.ToBrightRed(fullOldPath),
+                LogFormatter.ToBrightRed(fullNewPath));
+        }
+    }
+    
+    public void CopyDirectoryRecursive(string sourceDir, string destDir)
+    {
+        Directory.CreateDirectory(destDir);
+
+        foreach (var filePath in Directory.GetFiles(sourceDir))
+        {
+            var destFilePath = Path.Combine(destDir, Path.GetFileName(filePath));
+            File.Copy(filePath, destFilePath, overwrite: false);
+        }
+
+        foreach (var directoryPath in Directory.GetDirectories(sourceDir))
+        {
+            var destDirectoryPath = Path.Combine(destDir, Path.GetFileName(directoryPath));
+            CopyDirectoryRecursive(directoryPath, destDirectoryPath);
+        }
+    }
+    
     /// <summary>
     /// Save file content from a stream to disk.
     /// Uses atomic write with temporary file for data safety.

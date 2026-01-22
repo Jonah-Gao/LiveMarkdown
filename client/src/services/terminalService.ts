@@ -18,20 +18,38 @@ export async function ensureTerminalConnection(): Promise<void> {
     }
 }
 
-export async function initializeTerminal(cwd: string): Promise<void> {
+/**
+ * Initialize a terminal session with a specific session ID.
+ */
+export async function initializeTerminal(terminalId: string, cwd: string): Promise<void> {
     await ensureTerminalConnection()
     try {
-        await terminalConnection.invoke('TerminalInit', cwd)
+        await terminalConnection.invoke('TerminalInit', terminalId, cwd)
     } catch (err) {
         console.error('Terminal initialization failed:', err)
     }
 }
 
-export async function terminalInputAsync(data: string): Promise<void> {
+/**
+ * Send input to a terminal session.
+ */
+export async function terminalInputAsync(terminalId: string, data: string): Promise<void> {
     await ensureTerminalConnection()
     try {
-        await terminalConnection.invoke('TerminalInput', data)
+        await terminalConnection.invoke('TerminalInput', terminalId, data)
     } catch (err) {
         console.error('Terminal input failed:', err)
+    }
+}
+
+/**
+ * Close a terminal session.
+ */
+export async function closeTerminalSession(terminalId: string): Promise<void> {
+    await ensureTerminalConnection()
+    try {
+        await terminalConnection.invoke('TerminalDisconnect', terminalId)
+    } catch (err) {
+        console.error('Terminal close session failed:', err)
     }
 }

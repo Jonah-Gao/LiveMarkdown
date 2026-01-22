@@ -105,14 +105,10 @@ onMounted(async () => {
             <div class="workspace-wrapper">
                 <div class="workspace">
                     <template v-if="hasWorkspace">
-                        <FileExplorer
-                            v-show="showExplorer"
-                            :style="explorerStyle"
-                        />
-                        <SearchPanel
-                            v-show="showSearch"
-                            :style="explorerStyle"
-                        />
+                        <div v-show="showExplorer || showSearch" class="sidebar-panel" :style="explorerStyle">
+                            <FileExplorer v-show="showExplorer"/>
+                            <SearchPanel v-show="showSearch"/>
+                        </div>
                         <div v-show="showExplorer || showSearch" class="vertical-resizer"
                              @mousedown="workspace.startExplorerResize"></div>
 

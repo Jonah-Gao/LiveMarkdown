@@ -13,37 +13,37 @@ public class TerminalHub(TerminalService terminalService, ILogger<TerminalHub> l
     /// <summary>
     /// Initialise a new terminal session for the connection.
     /// </summary>
-    public async Task TerminalInit(string cwd)
+    public async Task TerminalInit(string terminalId, string cwd)
     {
         var connectionId = Context.ConnectionId;
-        logger.LogInformation("Initializing terminal for connection: {ConnectionId}", LogFormatter.ToCyan(connectionId));
+        logger.LogInformation("Initializing terminal for connection: {ConnectionId}",
+            LogFormatter.ToCyan(connectionId));
 
-        await terminalService.StartTerminalAsync(connectionId, "TerminalOutput", cwd);
+        await terminalService.StartTerminalAsync(terminalId, connectionId, "TerminalOutput", cwd);
     }
 
     /// <summary>
     /// Send input to the terminal.
     /// </summary>
-    public async Task TerminalInput(string data)
+    public async Task TerminalInput(string terminalId, string data)
     {
         logger.LogDebug("Received terminal input: {Data}", LogFormatter.ToYellow(data));
-        await terminalService.WriteInputAsync(Context.ConnectionId, data);
+        await terminalService.WriteInputAsync(terminalId, data);
     }
 
     /// <summary>
     /// Resize the terminal.
     /// </summary>
-    public void TerminalResize(int cols, int rows)
+    public void TerminalResize(string terminalId, int cols, int rows)
     {
-        terminalService.Resize(Context.ConnectionId, cols, rows);
+        terminalService.Resize(terminalId, cols, rows);
     }
 
     /// <summary>
     /// Clean up terminal session on disconnect.
     /// </summary>
-    public override Task OnDisconnectedAsync(Exception? exception)
+    public void TerminalDisconnect(string terminalId)
     {
-        terminalService.KillTerminal(Context.ConnectionId);
-        return base.OnDisconnectedAsync(exception);
+        terminalService.KillTerminal(terminalId);
     }
 }

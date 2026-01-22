@@ -70,6 +70,7 @@ public class FileHub : Hub
                 dirs = [];
                 ConnectionWatchedDirs[Context.ConnectionId] = dirs;
             }
+
             dirs.Add(fullPath);
         }
 
@@ -150,6 +151,66 @@ public class FileHub : Hub
     {
         _logger.LogInformation("Creating directory: {DirPath}", LogFormatter.ToGreen(dirPath));
         _fileService.CreateDirectory(dirPath);
+    }
+
+    public void DeleteDirectory(string dirPath)
+    {
+        _logger.LogInformation("Deleting directory: {DirPath}", LogFormatter.ToGreen(dirPath));
+        _fileService.DeleteDirectory(dirPath);
+    }
+    
+    public void MoveDirectory(string sourcePath, string destPath)
+    {
+        _logger.LogInformation("Moving directory from {SourcePath} to {DestPath}",
+            LogFormatter.ToGreen(sourcePath), LogFormatter.ToGreen(destPath));
+        _fileService.MoveDirectory(sourcePath, destPath);
+    }
+    
+    public void RenameDirectory(string sourcePath, string destPath)
+    {
+        _logger.LogInformation("Renaming directory from {SourcePath} to {DestPath}",
+            LogFormatter.ToGreen(sourcePath), LogFormatter.ToGreen(destPath));
+        _fileService.MoveDirectory(sourcePath, destPath);
+    }
+    
+    public void CopyDirectory(string sourcePath, string destPath)
+    {
+        _logger.LogInformation("Copying directory from {SourcePath} to {DestPath}",
+            LogFormatter.ToGreen(sourcePath), LogFormatter.ToGreen(destPath));
+        _fileService.CopyDirectory(sourcePath, destPath);
+    }
+
+    public void CreateFile(string filePath)
+    {
+        _logger.LogInformation("Creating file: {FilePath}", LogFormatter.ToGreen(filePath));
+        _fileService.CreateFile(filePath);
+    }
+
+    public void DeleteFile(string filePath)
+    {
+        _logger.LogInformation("Deleting file: {FilePath}", LogFormatter.ToGreen(filePath));
+        _fileService.DeleteFile(filePath);
+    }
+
+    public void MoveFile(string sourcePath, string destPath)
+    {
+        _logger.LogInformation("Moving file from {SourcePath} to {DestPath}",
+            LogFormatter.ToGreen(sourcePath), LogFormatter.ToGreen(destPath));
+        _fileService.MoveFile(sourcePath, destPath);
+    }
+
+    public void RenameFile(string sourcePath, string destPath)
+    {
+        _logger.LogInformation("Renaming file from {SourcePath} to {DestPath}",
+            LogFormatter.ToGreen(sourcePath), LogFormatter.ToGreen(destPath));
+        _fileService.MoveFile(sourcePath, destPath);
+    }
+
+    public void CopyFile(string sourcePath, string destPath)
+    {
+        _logger.LogInformation("Copying file from {SourcePath} to {DestPath}",
+            LogFormatter.ToGreen(sourcePath), LogFormatter.ToGreen(destPath));
+        _fileService.CopyFile(sourcePath, destPath);
     }
 
     /// <summary>

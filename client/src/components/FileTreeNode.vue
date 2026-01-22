@@ -119,9 +119,9 @@ function getFileIcon(extension: string): string {
     padding: 5px 8px 5px 12px;
     cursor: pointer;
     border-radius: 4px;
-    margin: 1px 4px;
     transition: background-color 0.1s ease;
     font-size: 13px;
+    white-space: nowrap;
 }
 
 .file-node-content:hover {
@@ -161,9 +161,6 @@ function getFileIcon(extension: string): string {
 .file-name {
     font-weight: 400;
     color: var(--text-primary);
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
 }
 
 .file-children {

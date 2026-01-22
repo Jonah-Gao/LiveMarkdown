@@ -34,6 +34,7 @@ export interface Tab {
     id: string
     name: string
     path: string
+    displayPath: string
     content: string
     isDirty: boolean
 }

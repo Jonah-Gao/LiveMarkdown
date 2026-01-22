@@ -43,7 +43,7 @@ const {visibleFileTree, hasWorkspace} = storeToRefs(workspace)
     font-family: inherit;
     color: var(--text-primary);
     padding: 0;
-    overflow-y: auto;
+    overflow: auto;
     height: 100%;
     user-select: none;
 }
@@ -54,5 +54,6 @@ const {visibleFileTree, hasWorkspace} = storeToRefs(workspace)
     justify-content: center;
     color: var(--text-muted);
     font-size: 13px;
+    overflow: hidden;
 }
 </style>

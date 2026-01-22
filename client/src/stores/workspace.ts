@@ -366,7 +366,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
         const index = tabs.value.findIndex(t => t.id === tab.id)
         if (index !== -1) {
             tabs.value.splice(index, 1)
-            layoutState.openedFiles = tabs.value.map(t => t.path)
+            layoutState.openedFiles = tabs.value.map(t => t.displayPath)
 
             if (tabs.value.length === 0) {
                 activeTabIndex.value = -1
@@ -477,6 +477,9 @@ export const useWorkspaceStore = defineStore('workspace', () => {
         attachResizeListeners()
     }
 
+    // Resize animation frame ID for smooth dragging
+    let resizeAnimationFrame: number | null = null
+
     /**
      * Attach global resize listeners.
      */
@@ -484,26 +487,42 @@ export const useWorkspaceStore = defineStore('workspace', () => {
         window.addEventListener('mousemove', handleResizeDrag)
         window.addEventListener('mouseup', stopResize)
         document.body.style.userSelect = 'none'
+        document.body.style.cursor = resizeState.type === 'terminal' ? 'row-resize' : 'col-resize'
+        // Disable pointer events on iframes to prevent them from capturing mouse events
+        document.querySelectorAll('iframe').forEach(iframe => {
+            iframe.style.pointerEvents = 'none'
+        })
     }
 
     /**
-     * Handle resize drag event.
+     * Handle resize drag event with requestAnimationFrame for smoother performance.
      */
     function handleResizeDrag(event: MouseEvent): void {
-        if (resizeState.type === 'explorer') {
-            const delta = event.clientX - resizeState.startX
-            layoutState.explorerWidth = clamp(resizeState.startSize + delta, MIN_EXPLORER_WIDTH, MAX_EXPLORER_WIDTH)
-        } else if (resizeState.type === 'preview') {
-            const delta = event.clientX - resizeState.startX
-            const allowedMin = resizeState.containerWidth * MIN_PREVIEW_RATIO
-            const allowedMax = resizeState.containerWidth * MAX_PREVIEW_RATIO
-            const newWidth = clamp(resizeState.startSize + delta, allowedMin, allowedMax)
-            const safeContainerWidth = Math.max(resizeState.containerWidth, 1)
-            layoutState.editorPreviewRatio = clamp(newWidth / safeContainerWidth, MIN_PREVIEW_RATIO, MAX_PREVIEW_RATIO)
-        } else if (resizeState.type === 'terminal') {
-            const delta = resizeState.startY - event.clientY
-            layoutState.terminalHeight = clamp(resizeState.startSize + delta, MIN_TERMINAL_HEIGHT, MAX_TERMINAL_HEIGHT)
+        if (!resizeState.type) return
+
+        // Cancel any pending animation frame
+        if (resizeAnimationFrame !== null) {
+            cancelAnimationFrame(resizeAnimationFrame)
         }
+
+        // Use requestAnimationFrame for smoother resizing
+        resizeAnimationFrame = requestAnimationFrame(() => {
+            if (resizeState.type === 'explorer') {
+                const delta = event.clientX - resizeState.startX
+                layoutState.explorerWidth = clamp(resizeState.startSize + delta, MIN_EXPLORER_WIDTH, MAX_EXPLORER_WIDTH)
+            } else if (resizeState.type === 'preview') {
+                const delta = event.clientX - resizeState.startX
+                const allowedMin = resizeState.containerWidth * MIN_PREVIEW_RATIO
+                const allowedMax = resizeState.containerWidth * MAX_PREVIEW_RATIO
+                const newWidth = clamp(resizeState.startSize + delta, allowedMin, allowedMax)
+                const safeContainerWidth = Math.max(resizeState.containerWidth, 1)
+                layoutState.editorPreviewRatio = clamp(newWidth / safeContainerWidth, MIN_PREVIEW_RATIO, MAX_PREVIEW_RATIO)
+            } else if (resizeState.type === 'terminal') {
+                const delta = resizeState.startY - event.clientY
+                layoutState.terminalHeight = clamp(resizeState.startSize + delta, MIN_TERMINAL_HEIGHT, MAX_TERMINAL_HEIGHT)
+            }
+            resizeAnimationFrame = null
+        })
     }
 
     /**
@@ -511,9 +530,18 @@ export const useWorkspaceStore = defineStore('workspace', () => {
      */
     function stopResize(): void {
         if (!resizeState.type) return
+        if (resizeAnimationFrame !== null) {
+            cancelAnimationFrame(resizeAnimationFrame)
+            resizeAnimationFrame = null
+        }
         window.removeEventListener('mousemove', handleResizeDrag)
         window.removeEventListener('mouseup', stopResize)
         document.body.style.userSelect = ''
+        document.body.style.cursor = ''
+        // Re-enable pointer events on iframes
+        document.querySelectorAll('iframe').forEach(iframe => {
+            iframe.style.pointerEvents = ''
+        })
         resizeState.type = null
     }
 
@@ -617,11 +645,12 @@ export const useWorkspaceStore = defineStore('workspace', () => {
                             id: chunk.id,
                             name: chunk.name,
                             path: window.nodePath.normalize(chunk.path),
+                            displayPath: window.nodePath.normalizeDisplay(chunk.path),
                             content: '',
                             isDirty: false,
                         }
                         tabs.value.push(tab)
-                        layoutState.openedFiles = tabs.value.map(t => t.path)
+                        layoutState.openedFiles = tabs.value.map(t => t.displayPath)
                         openTab(tab)
                     } else if (chunk.isError) {
                         console.error('Error loading tab:', chunk.content)
@@ -900,7 +929,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
                 layoutState.activeBottomPanel = settings.activeBottomPanel ?? null
 
                 // Restore opened files
-                layoutState.openedFiles = (settings.openedFiles ?? []).map(window.nodePath.normalize)
+                layoutState.openedFiles = (settings.openedFiles ?? []).map(window.nodePath.normalizeDisplay)
                 await openWorkspace(rootDirectory.value)
                 for (const filePath of layoutState.openedFiles) {
                     try {

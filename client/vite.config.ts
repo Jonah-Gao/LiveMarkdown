@@ -2,11 +2,17 @@ import {defineConfig} from 'vite'
 import path from 'node:path'
 import electron from 'vite-plugin-electron/simple'
 import vue from '@vitejs/plugin-vue'
+import monacoEditorPlugin from 'vite-plugin-monaco-editor'
+
+// The vite-plugin-monaco-editor package uses CommonJS default export
+// but TypeScript/ESM import gets the module object. This handles both cases.
+const monacoEditor = (monacoEditorPlugin as unknown as { default: typeof monacoEditorPlugin }).default || monacoEditorPlugin
 
 // https://vitejs.dev/config/
 export default defineConfig({
     plugins: [
         vue(),
+        monacoEditor({}),
         electron({
             main: {
                 // Shortcut of `build.lib.entry`.

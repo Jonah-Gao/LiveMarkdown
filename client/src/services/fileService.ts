@@ -78,7 +78,52 @@ export async function loadLayoutAsync(dirPath: string): Promise<PanelLayout | nu
 
 export async function createDirectory(dirPath: string): Promise<void> {
     await ensureFileServiceConnection()
-    await fileServiceConnection.invoke("CreateDirectory", dirPath)
+    await fileServiceConnection.send("CreateDirectory", dirPath)
+}
+
+export async function deleteDirectory(dirPath: string): Promise<void> {
+    await ensureFileServiceConnection()
+    await fileServiceConnection.send("DeleteDirectory", dirPath)
+}
+
+export async function moveDirectory(sourcePath: string, destPath: string): Promise<void> {
+    await ensureFileServiceConnection()
+    await fileServiceConnection.send("MoveDirectory", sourcePath, destPath)
+}
+
+export async function RenameDirectory(sourcePath: string, destPath: string): Promise<void> {
+    await ensureFileServiceConnection()
+    await fileServiceConnection.send("RenameDirectory", sourcePath, destPath)
+}
+
+export async function copyDirectory(sourcePath: string, destPath: string): Promise<void> {
+    await ensureFileServiceConnection()
+    await fileServiceConnection.send("CopyDirectory", sourcePath, destPath)
+}
+
+export async function createFile(filePath: string): Promise<void> {
+    await ensureFileServiceConnection()
+    await fileServiceConnection.send("CreateFile", filePath)
+}
+
+export async function deleteFile(filePath: string): Promise<void> {
+    await ensureFileServiceConnection()
+    await fileServiceConnection.send("DeleteFile", filePath)
+}
+
+export async function moveFile(sourcePath: string, destPath: string): Promise<void> {
+    await ensureFileServiceConnection()
+    await fileServiceConnection.send("MoveFile", sourcePath, destPath)
+}
+
+export async function renameFile(sourcePath: string, destPath: string): Promise<void> {
+    await ensureFileServiceConnection()
+    await fileServiceConnection.send("RenameFile", sourcePath, destPath)
+}
+
+export async function copyFile(sourcePath: string, destPath: string): Promise<void> {
+    await ensureFileServiceConnection()
+    await fileServiceConnection.send("CopyFile", sourcePath, destPath)
 }
 
 /**
