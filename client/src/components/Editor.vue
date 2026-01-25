@@ -3,7 +3,7 @@ import {onMounted, onUnmounted, ref, watch, nextTick} from 'vue'
 import {storeToRefs} from 'pinia'
 import * as monaco from 'monaco-editor'
 import {useWorkspaceStore} from '@/stores/workspace'
-import GITHUB_DARK from '@/styles/GitHub Dark Default.json'
+import GITHUB_DARK from '@/styles/github-dark-default.json'
 
 const workspace = useWorkspaceStore()
 const {code, currentLanguage, editorPaneStyle, showCodePane} = storeToRefs(workspace)
