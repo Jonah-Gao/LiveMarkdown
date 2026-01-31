@@ -142,6 +142,14 @@ public class PythonVenvRunner(ILogger<PythonVenvRunner> logger, IHubContext<Pyth
 
                 logger.LogInformation("Spawned PTY for terminal {TerminalId}", LogFormatter.ToCyan(terminalId));
 
+                var processExitedTcs = new TaskCompletionSource<int>();
+                terminal.ProcessExited += (_, exitCode) =>
+                {
+                    logger.LogInformation("Process exited for terminal {TerminalId} with exit code {ExitCode}",
+                        LogFormatter.ToCyan(terminalId), exitCode);
+                    processExitedTcs.TrySetResult(exitCode.ExitCode);
+                };
+
                 // Start background task to read output
                 _ = Task.Run(async () =>
                 {
@@ -172,41 +180,52 @@ public class PythonVenvRunner(ILogger<PythonVenvRunner> logger, IHubContext<Pyth
                         logger.LogError(ex, "Unexpected error reading PTY for terminal {TerminalId}",
                             LogFormatter.ToBrightRed(terminalId));
                     }
-                    finally
+
+                    // Wait for process to actually exit before cleanup
+                    try
                     {
-                        logger.LogInformation("PTY read loop ending for terminal {TerminalId}, cleaning up",
+                        using var timeoutCts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+                        using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(cts.Token, timeoutCts.Token);
+                        await processExitedTcs.Task.WaitAsync(linkedCts.Token);
+                    }
+                    catch (OperationCanceledException)
+                    {
+                        logger.LogDebug("Timed out waiting for process exit event for terminal {TerminalId}",
                             LogFormatter.ToCyan(terminalId));
+                    }
 
-                        // Clean-up the temporary script file
-                        if (File.Exists(scriptPath))
-                        {
-                            try
-                            {
-                                File.Delete(scriptPath);
-                                logger.LogDebug("Deleted temporary script: {ScriptPath}",
-                                    LogFormatter.ToGreen(scriptPath));
-                            }
-                            catch (Exception ex)
-                            {
-                                logger.LogWarning("Failed to delete temporary script {ScriptPath}: {Error}",
-                                    LogFormatter.ToGreen(scriptPath), LogFormatter.ToBrightRed(ex.Message));
-                            }
-                        }
+                    logger.LogInformation("PTY read loop ending for terminal {TerminalId}, cleaning up",
+                        LogFormatter.ToCyan(terminalId));
 
-                        // Notify frontend that execution is finished
-                        await hubContext.Clients.Client(connectionId)
-                            .SendAsync("CodeExecutionCompleted", terminalId, cancellationToken: cts.Token);
+                    // Clean-up the temporary script file
+                    if (File.Exists(scriptPath))
+                    {
+                        try
+                        {
+                            File.Delete(scriptPath);
+                            logger.LogDebug("Deleted temporary script: {ScriptPath}",
+                                LogFormatter.ToGreen(scriptPath));
+                        }
+                        catch (Exception ex)
+                        {
+                            logger.LogWarning("Failed to delete temporary script {ScriptPath}: {Error}",
+                                LogFormatter.ToGreen(scriptPath), LogFormatter.ToBrightRed(ex.Message));
+                        }
+                    }
 
-                        if (_terminals.TryGetValue(terminalId, out var currentTerminal) && currentTerminal == terminal)
-                        {
-                            KillTerminal(terminalId);
-                        }
-                        else
-                        {
-                            // Not the owner (a new process took over), just dispose local resources
-                            terminal.Dispose();
-                            cts.Dispose();
-                        }
+                    // Notify frontend that execution is finished
+                    await hubContext.Clients.Client(connectionId)
+                        .SendAsync("CodeExecutionCompleted", terminalId, cancellationToken: CancellationToken.None);
+
+                    if (_terminals.TryGetValue(terminalId, out var currentTerminal) && currentTerminal == terminal)
+                    {
+                        KillTerminal(terminalId);
+                    }
+                    else
+                    {
+                        // Not the owner (a new process took over), just dispose local resources
+                        terminal.Dispose();
+                        cts.Dispose();
                     }
                 }, cts.Token);
             }

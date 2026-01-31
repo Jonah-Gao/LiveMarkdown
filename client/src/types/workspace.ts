@@ -66,7 +66,7 @@ export type SidebarPanel = 'explorer' | 'search' | 'run' | 'terminal' | null
  * Layout state persisted to workspace settings.
  * Contains both UI dimensions and panel visibility state.
  */
-export interface PanelLayout {
+export interface WorkspaceSettings {
     // Panel dimensions
     explorerWidth: number
     terminalHeight: number
@@ -84,5 +84,11 @@ export interface PanelLayout {
 
     // Open files
     openedFiles: string[]
+    expandedDirectories: Set<string>
     activeFile: string
+}
+
+export interface WorkspaceSettingsDTO
+    extends Omit<WorkspaceSettings, 'expandedDirectories'> {
+    expandedDirectories: string[]
 }

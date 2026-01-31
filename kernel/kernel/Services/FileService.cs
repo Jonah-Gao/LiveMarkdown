@@ -77,6 +77,7 @@ public class FileService(ILogger<FileService> logger)
         double EditorPreviewRatio,
         ViewMode PreferredViewMode,
         string[] OpenedFiles,
+        string[] ExpandedDirectories,
         string ActiveFile = "",
         bool ExplorerVisible = true,
         bool SearchVisible = false,

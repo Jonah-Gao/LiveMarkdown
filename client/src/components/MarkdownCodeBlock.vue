@@ -4,7 +4,7 @@ import {onMounted, onUnmounted, ref, nextTick, watch} from "vue";
 import {Terminal} from "@xterm/xterm";
 import {FitAddon} from "@xterm/addon-fit";
 import '@xterm/xterm/css/xterm.css';
-import {theme} from "@/styles/GithubTerminalTheme.ts";
+import {theme} from "@/styles/GithubTerminalTheme.json";
 import hljs from 'highlight.js'
 import 'highlight.js/styles/github-dark.css'
 import {v4 as uuidv4} from "uuid";
@@ -149,9 +149,6 @@ function copyCodeBlock() {
         <div class="md-code-actions">
             <div class="md-icon-btn md-execute-btn" @click="executeCodeBlock">
                 <span class="material-symbols-outlined">play_arrow</span>
-            </div>
-            <div class="md-icon-btn md-execute-terminal-btn">
-                <span class="material-symbols-outlined">fast_forward</span>
             </div>
             <div class="md-icon-btn md-copy-btn" @click="copyCodeBlock">
                 <span class="material-symbols-outlined">content_copy</span>

@@ -1,6 +1,6 @@
 ﻿import * as signalR from '@microsoft/signalr'
 import SIGNALR_CONFIG from '@/config/signalr.json'
-import {FileNode, PanelLayout, TabChunk} from '@/types/workspace'
+import {FileNode, WorkspaceSettingsDTO, TabChunk} from '@/types/workspace'
 
 /**
  * SignalR connection for file service operations.
@@ -63,7 +63,7 @@ export async function saveTabAsync(filePath: string, content: string): Promise<v
 /**
  * Save workspace settings to disk.
  */
-export async function saveWorkspaceSettingsAsync(cwd: string, layout: PanelLayout): Promise<void> {
+export async function saveWorkspaceSettingsAsync(cwd: string, layout: WorkspaceSettingsDTO): Promise<void> {
     await ensureFileServiceConnection()
     await fileServiceConnection.invoke("SaveWorkspaceSettingsAsync", cwd, layout)
 }
@@ -71,9 +71,9 @@ export async function saveWorkspaceSettingsAsync(cwd: string, layout: PanelLayou
 /**
  * Load workspace settings from disk.
  */
-export async function loadLayoutAsync(dirPath: string): Promise<PanelLayout | null> {
+export async function loadLayoutAsync(dirPath: string): Promise<WorkspaceSettingsDTO | null> {
     await ensureFileServiceConnection()
-    return await fileServiceConnection.invoke<PanelLayout | null>("LoadWorkspaceSettingsAsync", dirPath)
+    return await fileServiceConnection.invoke<WorkspaceSettingsDTO | null>("LoadWorkspaceSettingsAsync", dirPath)
 }
 
 export async function createDirectory(dirPath: string): Promise<void> {

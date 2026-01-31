@@ -3,7 +3,7 @@ import {onMounted, onUnmounted, ref, watch, nextTick} from 'vue'
 import {storeToRefs} from 'pinia'
 import * as monaco from 'monaco-editor'
 import {useWorkspaceStore} from '@/stores/workspace'
-import GITHUB_DARK from '@/styles/github-dark-default.json'
+
 
 const workspace = useWorkspaceStore()
 const {code, currentLanguage, editorPaneStyle, showCodePane} = storeToRefs(workspace)
@@ -16,10 +16,8 @@ const EDITOR_OPTIONS: monaco.editor.IStandaloneEditorConstructionOptions = {
     minimap: {enabled: true},
     automaticLayout: true,
     wordWrap: 'on',
-    theme: 'github-dark-default'
+    theme: 'vs-dark'
 }
-
-monaco.editor.defineTheme('github-dark-default', GITHUB_DARK as monaco.editor.IStandaloneThemeData)
 
 function initializeEditor(): void {
     if (!editorContainer.value) return

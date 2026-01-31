@@ -12,7 +12,7 @@ import {
     terminalConnection,
     closeTerminalSession
 } from '@/services/terminalService.ts'
-import {theme} from '@/styles/GithubTerminalTheme'
+import theme from '@/styles/GithubTerminalTheme.json'
 import {v4 as uuidv4} from 'uuid'
 
 interface TerminalTab {

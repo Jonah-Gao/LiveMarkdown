@@ -1,6 +1,4 @@
-﻿import {ITheme} from "@xterm/xterm";
-
-export const theme: ITheme = {
+﻿{
     "black": "#484f58",
     "red": "#ff7b72",
     "green": "#3fb950",

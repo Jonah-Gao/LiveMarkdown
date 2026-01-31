@@ -44,6 +44,7 @@ for (const [category, extensions] of Object.entries(CATEGORY_MAP)) {
 const emit = defineEmits<{
     toggleFolder: [node: UIFileNode]
     openFile: [node: UIFileNode]
+    contextmenu: [event: MouseEvent, node: UIFileNode]
 }>()
 
 /**
@@ -55,6 +56,15 @@ function handleClick(node: UIFileNode): void {
     } else {
         emit('openFile', node)
     }
+}
+
+/**
+ * Handle right-click context menu.
+ */
+function handleContextMenu(event: MouseEvent, node: UIFileNode): void {
+    event.preventDefault()
+    event.stopPropagation()
+    emit('contextmenu', event, node)
 }
 
 /**
@@ -70,6 +80,7 @@ function getFileIcon(extension: string): string {
         <div
             class="file-node-content"
             @click="handleClick(node)"
+            @contextmenu="handleContextMenu($event, node)"
         >
             <span
                 v-if="node.isDirectory"
@@ -103,6 +114,7 @@ function getFileIcon(extension: string): string {
                 :node="child"
                 @toggle-folder="emit('toggleFolder', $event)"
                 @open-file="emit('openFile', $event)"
+                @contextmenu="emit('contextmenu', $event, child)"
             />
         </div>
     </div>

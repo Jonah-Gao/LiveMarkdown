@@ -9,9 +9,17 @@ import {
     loadLayoutAsync,
     startWatching,
     stopWatching,
-    onFileChanged
+    onFileChanged,
+    createFile,
+    deleteFile,
+    copyFile,
+    renameFile,
+    createDirectory,
+    deleteDirectory,
+    copyDirectory,
+    RenameDirectory
 } from '@/services/fileService'
-import {FileNode, PanelLayout, SidebarPanel, Tab, UIFileNode, ViewMode} from '@/types/workspace'
+import {FileNode, WorkspaceSettings, SidebarPanel, Tab, UIFileNode, ViewMode} from '@/types/workspace'
 
 const md = new MarkdownParser()
 
@@ -76,7 +84,7 @@ const VIEW_MODE_BUTTONS: { value: ViewMode, icon: string, label: string }[] = [
 ]
 
 // Default layout state values
-const DEFAULT_LAYOUT_STATE: PanelLayout = {
+const DEFAULT_LAYOUT_STATE: WorkspaceSettings = {
     explorerWidth: 240,
     terminalHeight: 250,
     editorPreviewRatio: 0.5,
@@ -87,6 +95,7 @@ const DEFAULT_LAYOUT_STATE: PanelLayout = {
     activeTopPanel: 'explorer',
     activeBottomPanel: null,
     openedFiles: [],
+    expandedDirectories: new Set<string>(),
     activeFile: ''
 }
 
@@ -125,7 +134,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     })
 
     // Unified layout state - all UI panel states in one place
-    const layoutState = reactive<PanelLayout>({...DEFAULT_LAYOUT_STATE})
+    const layoutState = reactive<WorkspaceSettings>({...DEFAULT_LAYOUT_STATE})
 
     // File watcher cleanup function
     let fileWatcherCleanup: (() => void) | null = null
@@ -556,11 +565,6 @@ export const useWorkspaceStore = defineStore('workspace', () => {
 
         // Preserve expanded state from existing nodes
         const expandedPaths = new Set<string>()
-        for (const [path, node] of targetMap.entries()) {
-            if (node.isDirectory && node.expanded) {
-                expandedPaths.add(path)
-            }
-        }
 
         if (targetMap.has(normalizedDir)) {
             tempMap.set(normalizedDir, {...targetMap.get(normalizedDir)!, displayPath: displayDir, children: []})
@@ -577,7 +581,10 @@ export const useWorkspaceStore = defineStore('workspace', () => {
                     const normalizedParentPath = node.parentPath ? window.nodePath.normalize(node.parentPath) : null
 
                     // Preserve expanded state if the node previously existed
-                    const wasExpanded = expandedPaths.has(normalizedPath)
+                    const wasExpanded = layoutState.expandedDirectories.has(normalizedPath)
+                    if (wasExpanded) {
+                        expandedPaths.add(normalizedPath)
+                    }
 
                     // Destructure to exclude properties we're overriding
                     const {path: _, parentPath: __, children: ___, expanded: ____, ...restNode} = node
@@ -611,7 +618,10 @@ export const useWorkspaceStore = defineStore('workspace', () => {
                         pendingChildren.delete(normalizedPath)
                     }
                 },
-                complete: () => resolve(),
+                complete: () => {
+                    layoutState.expandedDirectories = expandedPaths
+                    resolve()
+                },
                 error: (err) => reject(err)
             })
         })
@@ -779,6 +789,11 @@ export const useWorkspaceStore = defineStore('workspace', () => {
         if (fileNode) {
             fileNode.expanded = !node.expanded
             node.expanded = !node.expanded
+            if (layoutState.expandedDirectories.has(node.path)) {
+                layoutState.expandedDirectories.delete(node.path)
+            } else {
+                layoutState.expandedDirectories.add(node.path)
+            }
         }
     }
 
@@ -903,7 +918,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
      */
     async function saveWorkspaceSettings(): Promise<void> {
         try {
-            await saveWorkspaceSettingsAsync(rootDirectory.value, layoutState)
+            await saveWorkspaceSettingsAsync(rootDirectory.value, {...layoutState, expandedDirectories: [...layoutState.expandedDirectories]})
         } catch (err) {
             console.error('Failed to save workspace settings:', err)
         }
@@ -930,6 +945,8 @@ export const useWorkspaceStore = defineStore('workspace', () => {
 
                 // Restore opened files
                 layoutState.openedFiles = (settings.openedFiles ?? []).map(window.nodePath.normalizeDisplay)
+                layoutState.expandedDirectories = new Set((settings.expandedDirectories ?? []).map(window.nodePath.normalizeDisplay))
+                layoutState.explorerVisible = (settings.explorerVisible ?? true)
                 await openWorkspace(rootDirectory.value)
                 for (const filePath of layoutState.openedFiles) {
                     try {
@@ -949,6 +966,175 @@ export const useWorkspaceStore = defineStore('workspace', () => {
         } catch (err) {
             console.error('Failed to load workspace settings:', err)
         }
+    }
+
+    // Clipboard state for cut/copy/paste operations
+    const clipboard = reactive<{
+        path: string | null,
+        isDirectory: boolean,
+        operation: 'copy' | 'cut' | null
+    }>({
+        path: null,
+        isDirectory: false,
+        operation: null
+    })
+
+    /**
+     * Create a new file at the specified path.
+     */
+    async function createNewFile(parentPath: string, fileName: string): Promise<void> {
+        const filePath = window.nodePath.join(parentPath, fileName)
+        try {
+            await createFile(filePath)
+        } catch (err) {
+            console.error('Failed to create file:', err)
+        }
+    }
+
+    /**
+     * Create a new folder at the specified path.
+     */
+    async function createNewFolder(parentPath: string, folderName: string): Promise<void> {
+        const folderPath = window.nodePath.join(parentPath, folderName)
+        try {
+            await createDirectory(folderPath)
+        } catch (err) {
+            console.error('Failed to create folder:', err)
+        }
+    }
+
+    /**
+     * Delete a file at the specified path.
+     */
+    async function deleteFileNode(filePath: string, isDirectory: boolean): Promise<void> {
+        try {
+            if (isDirectory) {
+                await deleteDirectory(filePath)
+            } else {
+                await deleteFile(filePath)
+                // Close the tab if the file is open
+                const tab = tabs.value.find(t => t.path === window.nodePath.normalize(filePath))
+                if (tab) {
+                    const index = tabs.value.indexOf(tab)
+                    tabs.value.splice(index, 1)
+                    layoutState.openedFiles = tabs.value.map(t => t.displayPath)
+                    if (tabs.value.length === 0) {
+                        activeTabIndex.value = -1
+                        layoutState.activeFile = ''
+                        code.value = ''
+                    } else if (activeTabIndex.value >= index) {
+                        activeTabIndex.value = Math.max(0, tabs.value.length - 1)
+                        layoutState.activeFile = tabs.value[activeTabIndex.value].path
+                        code.value = tabs.value[activeTabIndex.value]?.content || ''
+                    }
+                }
+            }
+        } catch (err) {
+            console.error('Failed to delete:', err)
+        }
+    }
+
+    /**
+     * Rename a file or folder.
+     */
+    async function renameFileNode(oldPath: string, newName: string, isDirectory: boolean): Promise<void> {
+        const parentPath = window.nodePath.dirname(oldPath)
+        const newPath = window.nodePath.join(parentPath, newName)
+        try {
+            if (isDirectory) {
+                await RenameDirectory(oldPath, newPath)
+            } else {
+                await renameFile(oldPath, newPath)
+                // Update the tab if the file is open
+                const normalizedOldPath = window.nodePath.normalize(oldPath)
+                const tab = tabs.value.find(t => t.path === normalizedOldPath)
+                if (tab) {
+                    tab.path = window.nodePath.normalize(newPath)
+                    tab.displayPath = window.nodePath.normalizeDisplay(newPath)
+                    tab.name = newName
+                    layoutState.openedFiles = tabs.value.map(t => t.displayPath)
+                    if (layoutState.activeFile === normalizedOldPath) {
+                        layoutState.activeFile = tab.path
+                    }
+                }
+            }
+        } catch (err) {
+            console.error('Failed to rename:', err)
+        }
+    }
+
+    /**
+     * Copy a file or folder to clipboard.
+     */
+    function copyToClipboard(path: string, isDirectory: boolean): void {
+        clipboard.path = path
+        clipboard.isDirectory = isDirectory
+        clipboard.operation = 'copy'
+    }
+
+    /**
+     * Cut a file or folder to clipboard.
+     */
+    function cutToClipboard(path: string, isDirectory: boolean): void {
+        clipboard.path = path
+        clipboard.isDirectory = isDirectory
+        clipboard.operation = 'cut'
+    }
+
+    /**
+     * Paste from clipboard to the specified destination.
+     */
+    async function pasteFromClipboard(destinationPath: string): Promise<void> {
+        if (!clipboard.path || !clipboard.operation) return
+
+        const fileName = window.nodePath.basename(clipboard.path)
+        const destPath = window.nodePath.join(destinationPath, fileName)
+
+        try {
+            if (clipboard.isDirectory) {
+                if (clipboard.operation === 'copy') {
+                    await copyDirectory(clipboard.path, destPath)
+                } else {
+                    // For cut operation, we need to move (rename) the directory
+                    await RenameDirectory(clipboard.path, destPath)
+                }
+            } else {
+                if (clipboard.operation === 'copy') {
+                    await copyFile(clipboard.path, destPath)
+                } else {
+                    // For cut operation, we need to move (rename) the file
+                    const normalizedOldPath = window.nodePath.normalize(clipboard.path)
+                    await renameFile(clipboard.path, destPath)
+                    // Update the tab if the file is open
+                    const tab = tabs.value.find(t => t.path === normalizedOldPath)
+                    if (tab) {
+                        tab.path = window.nodePath.normalize(destPath)
+                        tab.displayPath = window.nodePath.normalizeDisplay(destPath)
+                        tab.name = fileName
+                        layoutState.openedFiles = tabs.value.map(t => t.displayPath)
+                        if (layoutState.activeFile === normalizedOldPath) {
+                            layoutState.activeFile = tab.path
+                        }
+                    }
+                }
+            }
+
+            // Clear clipboard after cut operation
+            if (clipboard.operation === 'cut') {
+                clipboard.path = null
+                clipboard.isDirectory = false
+                clipboard.operation = null
+            }
+        } catch (err) {
+            console.error('Failed to paste:', err)
+        }
+    }
+
+    /**
+     * Check if clipboard has content to paste.
+     */
+    function hasClipboardContent(): boolean {
+        return clipboard.path !== null && clipboard.operation !== null
     }
 
     return {
@@ -1022,6 +1208,17 @@ export const useWorkspaceStore = defineStore('workspace', () => {
 
         // Auto-save actions
         startAutoSave,
-        stopAutoSave
+        stopAutoSave,
+
+        // File operations
+        clipboard,
+        createNewFile,
+        createNewFolder,
+        deleteFileNode,
+        renameFileNode,
+        copyToClipboard,
+        cutToClipboard,
+        pasteFromClipboard,
+        hasClipboardContent
     }
 })
