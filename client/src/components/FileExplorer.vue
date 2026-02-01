@@ -253,9 +253,11 @@ function handleInputKeydown(event: KeyboardEvent): void {
     font-family: inherit;
     color: var(--text-primary);
     padding: 0;
-    overflow: auto;
+    overflow-y: scroll;
+    overflow-x: auto;
     height: 100%;
     user-select: none;
+    contain: strict;
 }
 
 .file-explorer.empty {

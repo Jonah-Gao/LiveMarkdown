@@ -216,10 +216,14 @@ public class FileHub : Hub
     /// <summary>
     /// Save file content from a stream.
     /// </summary>
-    public async Task SaveFileAsync(string filePath, ChannelReader<string> stream)
+    /// <param name="filePath">The target file path</param>
+    /// <param name="stream">The content stream to write</param>
+    /// <param name="encoding">The encoding to use when saving (default: utf-8)</param>
+    public async Task SaveFileAsync(string filePath, ChannelReader<string> stream, string encoding = "utf-8")
     {
-        _logger.LogInformation("Saving file: {FilePath}", LogFormatter.ToGreen(filePath));
-        await _fileService.SaveFileAsync(filePath, stream);
+        _logger.LogInformation("Saving file: {FilePath} with encoding: {Encoding}", 
+            LogFormatter.ToGreen(filePath), encoding);
+        await _fileService.SaveFileAsync(filePath, stream, encoding);
     }
 
     /// <summary>

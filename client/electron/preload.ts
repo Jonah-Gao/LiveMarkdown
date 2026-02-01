@@ -55,6 +55,7 @@ contextBridge.exposeInMainWorld('windowControls', {
     maximize: () => ipcRenderer.send('win:maximize'),
     close: () => ipcRenderer.send('win:close'),
     canClose: () => ipcRenderer.send('win:can-close'),
+    appReady: () => ipcRenderer.send('app:ready'),
 
     onMaximize: (cb: (maximized: boolean) => void) => {
         ipcRenderer.on('win:maximized', (_e, v) => cb(v))
@@ -69,4 +70,17 @@ contextBridge.exposeInMainWorld("cwd", {
     getCwd: () => ipcRenderer.invoke("cwd:get"),
     setDisplayCwd: (cwd: string) => ipcRenderer.send("cwd:set-display", cwd),
     getDisplayCwd: () => ipcRenderer.invoke("cwd:get-display")
+})
+
+contextBridge.exposeInMainWorld("kernel", {
+    start: () => ipcRenderer.send("kernel:start"),
+    stop: () => ipcRenderer.send("kernel:stop"),
+    getPort: () => ipcRenderer.invoke("kernel:get-port"),
+    getStatus: () => ipcRenderer.invoke("kernel:get-status"),
+    onPort: (cb: (port: number) => void) => {
+        ipcRenderer.on("kernel:port", (_e, port) => cb(port))
+    },
+    onStatus: (cb: (status: string, error?: string) => void) => {
+        ipcRenderer.on("kernel:status", (_e, status, error) => cb(status, error))
+    }
 })

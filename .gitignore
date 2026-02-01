@@ -113,9 +113,4 @@ pids
 TextEditorPlan.md
 test
 docs
-
-
-# =========================
-# WASM files (copied at install time)
-# =========================
-client/public/onigasm.wasm
+kernel

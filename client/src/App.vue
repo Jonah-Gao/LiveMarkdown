@@ -8,9 +8,12 @@ import Editor from './components/Editor.vue'
 import Preview from './components/Preview.vue'
 import Terminal from './components/Terminal.vue'
 import {useWorkspaceStore} from '@/stores/workspace'
+import {useKernelStore} from '@/stores/kernel'
 import NavigationBar from "@/components/NavigationBar.vue"
 
 const workspace = useWorkspaceStore()
+const kernelStore = useKernelStore()
+
 const {
     explorerStyle,
     showExplorer,
@@ -23,6 +26,8 @@ const {
     hasWorkspace,
     layoutState
 } = storeToRefs(workspace)
+
+const { status: kernelStatus } = storeToRefs(kernelStore)
 
 const sidebarButtons = workspace.sidebarButtons
 const viewModeButtons = workspace.viewModeButtons
@@ -54,12 +59,63 @@ function isBottomButtonActive(index: number): boolean {
 }
 
 onMounted(async () => {
-    // Initialize workspace with last working directory
-    workspace.rootDirectory = await window.cwd.getCwd()
-    workspace.displayRootDirectory = await window.cwd.getDisplayCwd()
-    console.log("root directory:", workspace.rootDirectory)
-    console.log("display root directory:", workspace.displayRootDirectory)
-    await workspace.loadWorkspaceSettings()
+    const startTime = Date.now()
+    let appReadyCalled = false
+
+    const callAppReady = () => {
+        if (appReadyCalled) return
+        appReadyCalled = true
+        const elapsed = Date.now() - startTime
+        const remaining = Math.max(0, 1000 - elapsed)
+        setTimeout(() => window.windowControls.appReady(), remaining)
+    }
+
+    // Timeout fallback - show main window after 10s even if loading fails
+    const timeout = setTimeout(() => {
+        console.warn('[App] Loading timeout, showing main window anyway')
+        callAppReady()
+    }, 10000)
+
+    try {
+        // Promise that resolves when kernel port is ready
+        const portReady = new Promise<void>((resolve) => {
+            window.kernel.onPort((port) => {
+                kernelStore.setPort(port)
+                console.log(port)
+                resolve()
+            })
+        })
+
+        window.kernel.onStatus((status, error) => {
+            kernelStore.setStatus(status as any, error)
+        })
+
+        // Get initial kernel state
+        const initialStatus = await window.kernel.getStatus()
+        kernelStore.setStatus(initialStatus)
+
+        // Check if port already available, otherwise wait for it
+        const initialPort = await window.kernel.getPort()
+        if (initialPort) {
+            kernelStore.setPort(initialPort)
+        } else {
+            await portReady
+        }
+
+        // Initialize workspace with last working directory (after kernel port is ready)
+        workspace.rootDirectory = await window.cwd.getCwd()
+        workspace.displayRootDirectory = await window.cwd.getDisplayCwd()
+        console.log("root directory:", workspace.rootDirectory)
+        console.log("display root directory:", workspace.displayRootDirectory)
+        await workspace.loadWorkspaceSettings()
+
+        clearTimeout(timeout)
+        callAppReady()
+    } catch (error) {
+        console.error('[App] Loading error:', error)
+        clearTimeout(timeout)
+        callAppReady()
+    }
 
     // Set up window close handler
     window.windowControls.onBeforeClose(() => {
@@ -152,9 +208,11 @@ onMounted(async () => {
 
         <div class="status-bar">
             <div class="status-bar-left">
-                <div class="status-item">
-                    <span class="status-indicator"></span>
-                    <span>Ready</span>
+                <div class="status-item" :class="'kernel-' + kernelStatus">
+                    <span v-if="kernelStatus === 'running'" class="status-indicator"></span>
+                    <span v-else-if="kernelStatus === 'starting'" class="status-indicator warning"></span>
+                    <span v-else class="status-indicator error"></span>
+                    <span>{{ kernelStatus === 'running' ? 'Ready' : kernelStatus === 'starting' ? 'Starting' : 'Kernel'}}</span>
                 </div>
                 <div class="status-item">
                     <span class="material-symbols-outlined">description</span>
@@ -166,7 +224,7 @@ onMounted(async () => {
                     <span>{{ workspace.currentLanguage }}</span>
                 </div>
                 <div class="status-item">
-                    <span>UTF-8</span>
+                    <span>{{ workspace.currentEncoding.toUpperCase() }}</span>
                 </div>
             </div>
         </div>

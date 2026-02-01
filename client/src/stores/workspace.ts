@@ -35,33 +35,70 @@ const MAX_PREVIEW_RATIO = 0.85
 // Auto-save interval in milliseconds (60 seconds)
 const AUTO_SAVE_INTERVAL = 60 * 1000
 
-// Language detection by file extension
+// Language detection by file extension - maps to Monaco editor language identifiers
 const LANGUAGE_BY_EXTENSION: Record<string, string> = {
-    '.ts': 'Typescript',
-    '.tsx': 'Typescript',
-    '.js': 'Javascript',
-    '.jsx': 'Javascript',
-    '.json': 'Json',
-    '.py': 'Python',
-    '.cs': 'Csharp',
-    '.cpp': 'C++',
-    '.c': 'C',
-    '.java': 'Java',
-    '.rb': 'Ruby',
-    '.go': 'Go',
-    '.rs': 'Rust',
-    '.html': 'Html',
+    '.ts': 'typescript',
+    '.tsx': 'typescriptreact',
+    '.js': 'javascript',
+    '.jsx': 'javascriptreact',
+    '.json': 'json',
+    '.py': 'python',
+    '.cs': 'csharp',
+    '.cpp': 'cpp',
+    '.c': 'c',
+    '.java': 'java',
+    '.rb': 'ruby',
+    '.go': 'go',
+    '.rs': 'rust',
+    '.html': 'html',
+    '.htm': 'html',
     '.css': 'css',
     '.scss': 'scss',
-    '.md': 'Markdown',
-    '.mdx': 'Markdown',
+    '.sass': 'scss',
+    '.less': 'less',
+    '.md': 'markdown',
+    '.mdx': 'markdown',
     '.sql': 'sql',
-    '.yml': 'Yaml',
-    '.yaml': 'Yaml',
-    '.sh': 'Shell',
-    '.ps1': 'Powershell',
-    '.vue': 'Vue',
-    'txt': 'Plaintext'
+    '.yml': 'yaml',
+    '.yaml': 'yaml',
+    '.sh': 'shell',
+    '.bash': 'shell',
+    '.zsh': 'shell',
+    '.ps1': 'powershell',
+    '.vue': 'vue',
+    '.txt': 'plaintext',
+    '.xml': 'xml',
+    '.php': 'php',
+    '.swift': 'swift',
+    '.kt': 'kotlin',
+    '.kts': 'kotlin',
+    '.scala': 'scala',
+    '.r': 'r',
+    '.lua': 'lua',
+    '.perl': 'perl',
+    '.pl': 'perl',
+    '.dockerfile': 'dockerfile',
+    '.graphql': 'graphql',
+    '.gql': 'graphql',
+    '.ini': 'ini',
+    '.toml': 'toml',
+    '.bat': 'bat',
+    '.cmd': 'bat',
+    '.clj': 'clojure',
+    '.coffee': 'coffeescript',
+    '.dart': 'dart',
+    '.fs': 'fsharp',
+    '.fsi': 'fsharp',
+    '.fsx': 'fsharp',
+    '.handlebars': 'handlebars',
+    '.hbs': 'handlebars',
+    '.pug': 'pug',
+    '.jade': 'pug',
+    '.razor': 'razor',
+    '.cshtml': 'razor',
+    '.vb': 'vb',
+    '.m': 'objective-c',
+    '.mm': 'objective-c'
 }
 
 // Sidebar button configuration
@@ -71,7 +108,6 @@ const SIDEBAR_BUTTONS = {
         {icon: 'search', panel: 'search' as SidebarPanel},
     ],
     bottom: [
-        {icon: 'play_arrow', panel: 'run' as SidebarPanel},
         {icon: 'terminal', panel: 'terminal' as SidebarPanel}
     ]
 }
@@ -145,6 +181,17 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     // Computed: workspace state
     const hasWorkspace = computed(() => !!rootDirectory.value)
     const hasTabs = computed(() => tabs.value.length > 0)
+
+    /**
+     * Get Monaco editor language identifier from file path or name.
+     * Returns the language ID based on file extension, or 'plaintext' if unknown.
+     */
+    function getLanguageFromPath(filePath: string): string {
+        const name = filePath.toLowerCase()
+        const extIndex = name.lastIndexOf('.')
+        const ext = extIndex >= 0 ? name.slice(extIndex) : ''
+        return (ext && LANGUAGE_BY_EXTENSION[ext]) || 'plaintext'
+    }
 
     /**
      * Sort children: folders first, then files, alphabetically within each group.
@@ -231,12 +278,18 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     const explorerStyle = computed(() => ({width: `${layoutState.explorerWidth}px`}))
     const terminalStyle = computed(() => ({height: `${layoutState.terminalHeight}px`}))
 
-    // Computed: language detection for status bar
+    // Computed: language detection for status bar and Monaco editor
+    // Uses the stored language from the tab, or derives it from file extension
     const currentLanguage = computed(() => {
-        const name = (activeTab.value?.path || activeTab.value?.name || '').toLowerCase()
-        const extIndex = name.lastIndexOf('.')
-        const ext = extIndex >= 0 ? name.slice(extIndex) : ''
-        return (ext && LANGUAGE_BY_EXTENSION[ext]) || ''
+        if (activeTab.value?.language) {
+            return activeTab.value.language
+        }
+        return getLanguageFromPath(activeTab.value?.path || activeTab.value?.name || '')
+    })
+
+    // Computed: current file encoding for status bar
+    const currentEncoding = computed(() => {
+        return activeTab.value?.encoding || 'utf-8'
     })
 
     // Computed: editor/preview pane flex styles
@@ -364,7 +417,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     async function closeTab(tab: Tab): Promise<void> {
         if (tab.isDirty) {
             try {
-                await saveTabAsync(tab.path, tab.content)
+                await saveTabAsync(tab.path, tab.content, tab.encoding || 'utf-8')
                 tab.isDirty = false
             } catch (err) {
                 console.error('Failed to save tab before closing:', tab.path, err)
@@ -396,11 +449,12 @@ export const useWorkspaceStore = defineStore('workspace', () => {
 
     /**
      * Save all tabs that have unsaved changes.
+     * Uses the tab's detected encoding to preserve the original encoding.
      */
     async function saveDirtyTabs(): Promise<void> {
         for (const tab of tabs.value.filter((t: Tab): boolean => t.isDirty)) {
             try {
-                await saveTabAsync(tab.path, tab.content)
+                await saveTabAsync(tab.path, tab.content, tab.encoding || 'utf-8')
                 tab.isDirty = false
             } catch (err) {
                 console.error('Failed to save tab:', tab.path, err)
@@ -643,6 +697,8 @@ export const useWorkspaceStore = defineStore('workspace', () => {
 
     /**
      * Stream file content into a tab via streaming.
+     * The tab metadata includes detected encoding from the backend.
+     * Language is determined from the file extension.
      */
     async function streamTabAsync(filePath: string): Promise<void> {
         const normalizedPath = window.nodePath.normalizeDisplay(filePath)
@@ -658,6 +714,8 @@ export const useWorkspaceStore = defineStore('workspace', () => {
                             displayPath: window.nodePath.normalizeDisplay(chunk.path),
                             content: '',
                             isDirty: false,
+                            encoding: chunk.encoding || 'utf-8',
+                            language: getLanguageFromPath(chunk.path || chunk.name)
                         }
                         tabs.value.push(tab)
                         layoutState.openedFiles = tabs.value.map(t => t.displayPath)
@@ -1173,6 +1231,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
         explorerStyle,
         terminalStyle,
         currentLanguage,
+        currentEncoding,
         editorPaneStyle,
         previewPaneStyle,
 

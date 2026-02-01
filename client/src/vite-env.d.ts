@@ -50,6 +50,7 @@ declare global {
             maximize(): void
             close(): void
             canClose(): void
+            appReady(): void
             onMaximize(cb: (maximized: boolean) => void): void
             onBeforeClose(cb: () => void): void
         }
@@ -58,6 +59,14 @@ declare global {
             getCwd(): Promise<string>
             setDisplayCwd(cwd: string): void
             getDisplayCwd(): Promise<string>
+        }
+        kernel: {
+            start(): void
+            stop(): void
+            getPort(): Promise<number | null>
+            getStatus(): Promise<'starting' | 'running' | 'stopped' | 'error'>
+            onPort(cb: (port: number) => void): void
+            onStatus(cb: (status: string, error?: string) => void): void
         }
         require?: NodeRequire
     }

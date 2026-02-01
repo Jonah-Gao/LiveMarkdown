@@ -47,24 +47,26 @@ onUnmounted(() => {
 </script>
 
 <template>
-    <div
-        ref="menuRef"
-        class="context-menu"
-        :style="{ left: `${x}px`, top: `${y}px` }"
-    >
-        <template v-for="(item, index) in items" :key="index">
-            <div v-if="item.separator" class="context-menu-separator"></div>
-            <div
-                v-else
-                class="context-menu-item"
-                :class="{ disabled: item.disabled }"
-                @click="handleItemClick(item)"
-            >
-                <span v-if="item.icon" class="material-symbols-outlined menu-icon">{{ item.icon }}</span>
-                <span class="menu-label">{{ item.label }}</span>
-            </div>
-        </template>
-    </div>
+    <Teleport to="body">
+        <div
+            ref="menuRef"
+            class="context-menu"
+            :style="{ left: `${x}px`, top: `${y}px` }"
+        >
+            <template v-for="(item, index) in items" :key="index">
+                <div v-if="item.separator" class="context-menu-separator"></div>
+                <div
+                    v-else
+                    class="context-menu-item"
+                    :class="{ disabled: item.disabled }"
+                    @click="handleItemClick(item)"
+                >
+                    <span v-if="item.icon" class="material-symbols-outlined menu-icon">{{ item.icon }}</span>
+                    <span class="menu-label">{{ item.label }}</span>
+                </div>
+            </template>
+        </div>
+    </Teleport>
 </template>
 
 <style scoped>
@@ -76,7 +78,7 @@ onUnmounted(() => {
     padding: 4px 0;
     min-width: 160px;
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
-    z-index: 1000;
+    z-index: 10000;
 }
 
 .context-menu-item {

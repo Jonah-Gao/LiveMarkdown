@@ -6,6 +6,7 @@ using System.Text.Json.Serialization;
 using System.Threading.Channels;
 using JetBrains.Annotations;
 using kernel.Utils;
+using UtfUnknown;
 
 namespace kernel.Services;
 
@@ -41,7 +42,8 @@ public class FileService(ILogger<FileService> logger)
         [property: UsedImplicitly] string Path = "",
         [property: UsedImplicitly] string Content = "",
         [property: UsedImplicitly] bool IsMetadata = false,
-        [property: UsedImplicitly] bool IsError = false
+        [property: UsedImplicitly] bool IsError = false,
+        [property: UsedImplicitly] string Encoding = "utf-8"
     );
 
     /// <summary>
@@ -101,38 +103,72 @@ public class FileService(ILogger<FileService> logger)
 
     /// <summary>
     /// Stream file content as chunks for efficient loading of large files.
-    /// First yields metadata, then yields content chunks.
+    /// First yields metadata (including detected encoding), then yields content chunks.
+    /// Uses Mozilla Universal Charset Detector to detect file encoding.
     /// </summary>
     public async IAsyncEnumerable<TabChunk> StreamTabAsync(string filePath,
         [EnumeratorCancellation] CancellationToken token = default)
     {
         var tabId = Guid.NewGuid().ToString();
 
+        // Detect file encoding using Mozilla Universal Charset Detector
+        var detectedEncoding = "utf-8";
+        try
+        {
+            var result = await CharsetDetector.DetectFromFileAsync(filePath, token);
+            if (result.Detected?.EncodingName != null)
+            {
+                // Treat ASCII as UTF-8 for frontend compatibility
+                detectedEncoding = result.Detected.EncodingName.Equals("ASCII", StringComparison.OrdinalIgnoreCase)
+                    ? "utf-8"
+                    : result.Detected.EncodingName;
+                logger.LogDebug("Detected encoding for {FilePath}: {Encoding}", 
+                    LogFormatter.ToGreen(filePath), detectedEncoding);
+            }
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Failed to detect encoding for {FilePath}, defaulting to UTF-8", filePath);
+        }
+
         // First return tab metadata so frontend can create the tab immediately
         yield return new TabChunk(
             Id: tabId,
             Name: Path.GetFileName(filePath),
             Path: filePath,
-            IsMetadata: true
+            IsMetadata: true,
+            Encoding: detectedEncoding
         );
 
-        await foreach (var chunk in StreamFileContentAsync(tabId, filePath, token))
+        await foreach (var chunk in StreamFileContentAsync(tabId, filePath, detectedEncoding, token))
         {
             yield return chunk;
         }
     }
 
     /// <summary>
-    /// Stream file content in chunks.
+    /// Stream file content in chunks using the specified encoding.
     /// </summary>
-    private async IAsyncEnumerable<TabChunk> StreamFileContentAsync(string tabId, string filePath,
-        [EnumeratorCancellation] CancellationToken token = default)
+    private async IAsyncEnumerable<TabChunk> StreamFileContentAsync(string tabId, string filePath, 
+        string encodingName, [EnumeratorCancellation] CancellationToken token = default)
     {
         TabChunk? errorTabChunk = null;
+        Encoding encoding;
+        
+        try
+        {
+            encoding = GetEncodingByName(encodingName);
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Failed to get encoding {EncodingName}, falling back to UTF-8", encodingName);
+            encoding = Encoding.UTF8;
+        }
+        
         StreamReader? reader = null;
         try
         {
-            reader = File.OpenText(filePath);
+            reader = new StreamReader(filePath, encoding, detectEncodingFromByteOrderMarks: true);
         }
         catch (UnauthorizedAccessException ex)
         {
@@ -155,9 +191,8 @@ public class FileService(ILogger<FileService> logger)
         {
             const int chunkSize = 65536; // 64KiB per chunk for efficient streaming
             var buffer = new char[chunkSize];
-            using var stream = File.OpenText(filePath);
             int charsRead;
-            while ((charsRead = await stream.ReadAsync(buffer, 0, buffer.Length)) > 0)
+            while ((charsRead = await reader!.ReadAsync(buffer, 0, buffer.Length)) > 0)
             {
                 token.ThrowIfCancellationRequested();
                 yield return new TabChunk(
@@ -166,6 +201,24 @@ public class FileService(ILogger<FileService> logger)
                 );
             }
         }
+    }
+    
+    /// <summary>
+    /// Get the Encoding object by name, with fallback to UTF-8.
+    /// </summary>
+    private static Encoding GetEncodingByName(string encodingName)
+    {
+        // Common encoding name mappings
+        return encodingName.ToLowerInvariant() switch
+        {
+            "utf-8" or "utf8" => Encoding.UTF8,
+            "utf-16le" or "utf-16" => Encoding.Unicode,
+            "utf-16be" => Encoding.BigEndianUnicode,
+            "utf-32" or "utf-32le" => Encoding.UTF32,
+            "ascii" => Encoding.UTF8,
+            "iso-8859-1" or "latin1" => Encoding.Latin1,
+            _ => Encoding.GetEncoding(encodingName)
+        };
     }
 
     /// <summary>
@@ -524,7 +577,12 @@ public class FileService(ILogger<FileService> logger)
     /// Save file content from a stream to disk.
     /// Uses atomic write with temporary file for data safety.
     /// </summary>
-    public async Task SaveFileAsync(string filePath, ChannelReader<string> stream, CancellationToken ct = default)
+    /// <param name="filePath">The target file path</param>
+    /// <param name="stream">The content stream to write</param>
+    /// <param name="encodingName">The encoding to use when saving (default: utf-8)</param>
+    /// <param name="ct">Cancellation token</param>
+    public async Task SaveFileAsync(string filePath, ChannelReader<string> stream, 
+        string encodingName = "utf-8", CancellationToken ct = default)
     {
         if (string.IsNullOrWhiteSpace(filePath))
         {
@@ -544,10 +602,24 @@ public class FileService(ILogger<FileService> logger)
         Directory.CreateDirectory(dir);
 
         var tempPath = Path.Combine(dir, $"{Path.GetFileName(fullPath)}.{Guid.NewGuid():N}.tmp");
+        
+        // Get the encoding to use for saving
+        Encoding encoding;
+        try
+        {
+            encoding = GetEncodingByName(encodingName);
+            logger.LogDebug("Saving file {FilePath} with encoding: {Encoding}", 
+                LogFormatter.ToGreen(fullPath), encodingName);
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Failed to get encoding {EncodingName}, falling back to UTF-8", encodingName);
+            encoding = Encoding.UTF8;
+        }
 
         try
         {
-            await using (var writer = new StreamWriter(tempPath, false, Encoding.UTF8, 65536))
+            await using (var writer = new StreamWriter(tempPath, false, encoding, 65536))
             {
                 await foreach (var chunk in stream.ReadAllAsync(ct))
                 {

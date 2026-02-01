@@ -37,6 +37,8 @@ export interface Tab {
     displayPath: string
     content: string
     isDirty: boolean
+    encoding: string          // Detected file encoding (e.g., "utf-8", "utf-16le")
+    language: string          // Monaco editor language identifier
 }
 
 /**
@@ -50,6 +52,7 @@ export interface TabChunk {
     content: string
     isMetadata: boolean
     isError: boolean
+    encoding: string          // Detected file encoding
 }
 
 /**

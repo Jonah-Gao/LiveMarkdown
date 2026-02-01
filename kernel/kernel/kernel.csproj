@@ -15,6 +15,7 @@
         <PackageReference Include="Microsoft.PowerShell.SDK" Version="7.5.3" />
         <PackageReference Include="Pty.Net" Version="0.3.94-pre" />
         <PackageReference Include="System.Management.Automation" Version="7.5.3" />
+        <PackageReference Include="UTF.Unknown" Version="2.6.0" />
     </ItemGroup>
 <!--    <Import Project="$(NuGetPackageRoot)pty.net\0.3.94-pre\build\Pty.Net.targets"/>-->
 </Project>

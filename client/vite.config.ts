@@ -10,6 +10,14 @@ const monacoEditor = (monacoEditorPlugin as unknown as { default: typeof monacoE
 
 // https://vitejs.dev/config/
 export default defineConfig({
+    build: {
+        rollupOptions: {
+            input: {
+                main: path.join(__dirname, 'index.html'),
+                splash: path.join(__dirname, 'splash.html'),
+            },
+        },
+    },
     plugins: [
         vue(),
         monacoEditor({}),
@@ -19,9 +27,6 @@ export default defineConfig({
                 entry: 'electron/main.ts',
                 vite: {
                     build: {
-                        rollupOptions: {
-                            external: ['@lydell/node-pty'],
-                        },
                     },
                 },
             },
@@ -32,7 +37,6 @@ export default defineConfig({
                 vite: {
                     build: {
                         rollupOptions: {
-                            external: ["@lydell/node-pty"],
                             output: {
                                 format: 'module', // Use moduleJS format
                                 entryFileNames: 'preload.mjs', // Force filename to preload.mjs

@@ -5,14 +5,15 @@ import {Terminal as XTerminal} from '@xterm/xterm'
 import {FitAddon} from '@xterm/addon-fit'
 import '@xterm/xterm/css/xterm.css'
 import {useWorkspaceStore} from '@/stores/workspace'
+import {useKernelStore} from '@/stores/kernel'
 import {
     initializeTerminal,
     ensureTerminalConnection,
     terminalInputAsync,
-    terminalConnection,
+    getTerminalConnection,
     closeTerminalSession
 } from '@/services/terminalService.ts'
-import theme from '@/styles/GithubTerminalTheme.json'
+import terminalTheme from '@/styles/GithubTerminalTheme.json'
 import {v4 as uuidv4} from 'uuid'
 
 interface TerminalTab {
@@ -26,6 +27,7 @@ interface TerminalTab {
 }
 
 const workspace = useWorkspaceStore()
+const kernelStore = useKernelStore()
 const {showTerminal, layoutState, terminalStyle} = storeToRefs(workspace)
 
 // Terminal tabs management
@@ -42,7 +44,7 @@ const TERMINAL_CONFIG = {
     fontSize: 13,
     lineHeight: 1,
     letterSpacing: 0,
-    theme: theme,
+    theme: terminalTheme,
     convertEol: true,
 }
 
@@ -210,9 +212,14 @@ watch(() => layoutState.value.terminalHeight, async () => {
 })
 
 onMounted(async () => {
+    if (!kernelStore.isRunning) {
+        console.log('Terminal: Waiting for kernel...')
+        return
+    }
     await ensureTerminalConnection()
-    terminalConnection.on('TerminalOutput', handleTerminalOutput)
-    terminalConnection.on('TerminalOutputSession', handleTerminalOutput)
+    const conn = getTerminalConnection()
+    conn.on('TerminalOutput', handleTerminalOutput)
+    conn.on('TerminalOutputSession', handleTerminalOutput)
     window.addEventListener('resize', handleResize)
 
     // Create initial terminal tab
@@ -220,8 +227,15 @@ onMounted(async () => {
 })
 
 onUnmounted(async () => {
-    terminalConnection.off('TerminalOutput', handleTerminalOutput)
-    terminalConnection.off('TerminalOutputSession', handleTerminalOutput)
+    if (kernelStore.isRunning) {
+        try {
+            const conn = getTerminalConnection()
+            conn.off('TerminalOutput', handleTerminalOutput)
+            conn.off('TerminalOutputSession', handleTerminalOutput)
+        } catch (e) {
+            // Ignore if kernel not running
+        }
+    }
     window.removeEventListener('resize', handleResize)
 
     for (const tab of terminalTabs) {

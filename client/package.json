@@ -2,18 +2,22 @@
   "name": "client",
   "private": true,
   "version": "0.0.0",
+  "description": "CS NEA Project",
+  "author": "Jonah Gao",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "vue-tsc && vite build && electron-builder",
     "preview": "vite preview",
-    "test": "vitest"
+    "test": "vitest",
+    "start": "electron ."
   },
   "dependencies": {
     "@microsoft/signalr": "^10.0.0",
     "@xterm/addon-fit": "^0.10.0",
     "@xterm/xterm": "^5.5.0",
     "electron-store": "^11.0.2",
+    "electron-window-state": "^5.0.3",
     "highlight.js": "^11.11.1",
     "material-symbols": "^0.40.0",
     "monaco-editor": "^0.55.1",

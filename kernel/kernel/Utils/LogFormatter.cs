@@ -1,4 +1,6 @@
-﻿namespace kernel.Utils;
+﻿using JetBrains.Annotations;
+
+namespace kernel.Utils;
 
 /// <summary>
 /// Provides ANSI colour formatting for console log output.
@@ -23,41 +25,54 @@ public static class LogFormatter
     private const string BrightCyan = "\e[96m";
 
     /// <summary>Format value with white colour.</summary>
+    [UsedImplicitly]
     public static string ToWhite(object value) => $"{White}{value}{Reset}";
 
     /// <summary>Format value with red colour.</summary>
+    [UsedImplicitly]
     public static string ToRed(object value) => $"{Red}{value}{Reset}";
 
     /// <summary>Format value with green colour.</summary>
+    [UsedImplicitly]
     public static string ToGreen(object value) => $"{Green}{value}{Reset}";
 
     /// <summary>Format value with yellow colour.</summary>
+    [UsedImplicitly]
     public static string ToYellow(object value) => $"{Yellow}{value}{Reset}";
 
     /// <summary>Format value with blue colour.</summary>
+    [UsedImplicitly]
     public static string ToBlue(object value) => $"{Blue}{value}{Reset}";
 
     /// <summary>Format value with magenta colour.</summary>
+    [UsedImplicitly]
     public static string ToMagenta(object value) => $"{Magenta}{value}{Reset}";
 
     /// <summary>Format value with cyan colour.</summary>
+    [UsedImplicitly]
     public static string ToCyan(object value) => $"{Cyan}{value}{Reset}";
 
     /// <summary>Format value with bright red colour (for errors).</summary>
+    [UsedImplicitly]
     public static string ToBrightRed(object value) => $"{BrightRed}{value}{Reset}";
 
     /// <summary>Format value with bright green colour.</summary>
+    [UsedImplicitly]
     public static string ToBrightGreen(object value) => $"{BrightGreen}{value}{Reset}";
 
     /// <summary>Format value with bright yellow colour.</summary>
+    [UsedImplicitly]
     public static string ToBrightYellow(object value) => $"{BrightYellow}{value}{Reset}";
 
     /// <summary>Format value with bright blue colour.</summary>
+    [UsedImplicitly]
     public static string ToBrightBlue(object value) => $"{BrightBlue}{value}{Reset}";
 
     /// <summary>Format value with bright magenta colour.</summary>
+    [UsedImplicitly]
     public static string ToBrightMagenta(object value) => $"{BrightMagenta}{value}{Reset}";
 
     /// <summary>Format value with bright cyan colour.</summary>
+    [UsedImplicitly]
     public static string ToBrightCyan(object value) => $"{BrightCyan}{value}{Reset}";
 }

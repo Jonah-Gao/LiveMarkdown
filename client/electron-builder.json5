@@ -2,15 +2,22 @@
 // Windows-only application
 {
   "$schema": "https://raw.githubusercontent.com/electron-userland/electron-builder/master/packages/app-builder-lib/scheme.json",
-  "appId": "YourAppID",
+  "appId": "com.csnea.client",
   "asar": true,
-  "productName": "YourAppName",
+  "productName": "LiveMarkdown",
   "directories": {
     "output": "release/${version}"
   },
   "files": [
     "dist",
     "dist-electron"
+  ],
+  "extraResources": [
+    {
+      "from": "kernel",
+      "to": ".kernel",
+      "filter": ["**/*"]
+    }
   ],
   "win": {
     "target": [
@@ -21,7 +28,8 @@
         ]
       }
     ],
-    "artifactName": "${productName}-Windows-${version}-Setup.${ext}"
+    "artifactName": "${productName}-Windows-${version}-Setup.${ext}",
+    "icon": "public/favicon.ico"
   },
   "nsis": {
     "oneClick": false,
