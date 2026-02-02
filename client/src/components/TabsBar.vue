@@ -12,7 +12,8 @@ const {tabs, activeTabIndex, isMarkdownTab, currentViewMode} = storeToRefs(works
 
 function onWheel(e: WheelEvent) {
     const el = e.currentTarget as HTMLElement
-    el.scrollLeft += e.deltaY
+    el.scrollLeft += e.deltaY  // Horizontal scroll on vertical wheel
+    el.scrollLeft += e.deltaX
 }
 
 </script>

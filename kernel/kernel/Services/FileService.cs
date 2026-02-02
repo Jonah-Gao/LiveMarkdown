@@ -52,9 +52,9 @@ public class FileService(ILogger<FileService> logger)
     [JsonConverter(typeof(JsonStringEnumConverter))]
     public enum ViewMode
     {
-        [EnumMember(Value = "code")] Code,
-        [EnumMember(Value = "split")] Split,
-        [EnumMember(Value = "preview")] Preview,
+        [UsedImplicitly][EnumMember(Value = "code")] Code,
+        [UsedImplicitly][EnumMember(Value = "split")] Split,
+        [UsedImplicitly][EnumMember(Value = "preview")] Preview
     }
 
     /// <summary>
@@ -63,10 +63,10 @@ public class FileService(ILogger<FileService> logger)
     [JsonConverter(typeof(JsonStringEnumConverter))]
     public enum SidebarPanel
     {
-        [EnumMember(Value = "explorer")] Explorer,
-        [EnumMember(Value = "search")] Search,
-        [EnumMember(Value = "run")] Run,
-        [EnumMember(Value = "terminal")] Terminal,
+        [UsedImplicitly][EnumMember(Value = "explorer")] Explorer,
+        [UsedImplicitly][EnumMember(Value = "search")] Search,
+        [UsedImplicitly][EnumMember(Value = "run")] Run,
+        [UsedImplicitly][EnumMember(Value = "terminal")] Terminal
     }
 
     /// <summary>
@@ -556,7 +556,7 @@ public class FileService(ILogger<FileService> logger)
         }
     }
     
-    public void CopyDirectoryRecursive(string sourceDir, string destDir)
+    private static void CopyDirectoryRecursive(string sourceDir, string destDir)
     {
         Directory.CreateDirectory(destDir);
 

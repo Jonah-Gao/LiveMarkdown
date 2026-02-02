@@ -628,7 +628,8 @@ class Lexer {
      * @returns [Token for the list, length consumed]
      */
     private parseUnorderedList(input: string, initialMarker: string, initialIndent: number, initialMarkerWidth: number): [result: Token, length: number] {
-        const bulletMarkerRegex = new RegExp(`^ {0,3}([${initialMarker.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}])(?: {1,4}|\\t|$)`);
+        const replacedMarker: string = initialMarker.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        const bulletMarkerRegex = new RegExp(`^ {0,3}([${replacedMarker}])(?: {1,4}|\\t|$)`);
         let items: Token[] = [];
         let idx: number;
         let loose: boolean = false;
@@ -749,8 +750,9 @@ class Lexer {
      * @returns [Token for the list, length consumed]
      */
     private parseOrderedList(input: string, initialMarker: string, initialIndent: number, initialMarkerWidth: number): [result: Token, length: number] {
-        const delimiter = initialMarker.slice(-1); // . or )
-        const orderedMarkerRegex = new RegExp(`^ {0,3}(\\d{1,9}[${delimiter === '.' ? '\\.' : '\\)'}])(?: {1,4}|\\t|$)`);
+        const delimiter: string = initialMarker.slice(-1); // . or )
+        const marker: string = delimiter === '.' ? '\\.' : '\\)'
+        const orderedMarkerRegex = new RegExp(`^ {0,3}(\\d{1,9}[${marker}])(?: {1,4}|\\t|$)`);
         let items: Token[] = [];
         let idx: number;
         let loose: boolean = false;

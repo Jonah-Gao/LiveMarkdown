@@ -89,13 +89,14 @@ function startKernel(): void {
 
     // In production, kernel is in resources/.kernel folder
     // In development, it's in the project's kernel folder
-    const kernelPath = isDev
-        ? path.join(APP_ROOT, 'kernel', 'kernel.exe')
-        : path.join(process.resourcesPath, '.kernel', 'kernel.exe')
+    const kernelDir = isDev
+        ? path.join(APP_ROOT, 'kernel')
+        : path.join(process.resourcesPath, '.kernel')
+    const kernelPath = path.join(kernelDir, 'kernel.exe')
 
     console.log('[Kernel] Starting from:', kernelPath)
 
-    kernelProcess = spawn(kernelPath, [], {stdio: 'pipe'})
+    kernelProcess = spawn(kernelPath, [], {stdio: 'pipe', cwd: kernelDir})
 
     const onData = (chunk: Buffer) => {
         const msg = chunk.toString()
