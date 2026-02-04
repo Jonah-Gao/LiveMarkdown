@@ -219,7 +219,7 @@ public class FileWatcherService(ILogger<FileWatcherService> logger) : IDisposabl
         GC.SuppressFinalize(this);
     }
 
-    protected virtual void Dispose(bool disposing)
+    private void Dispose(bool disposing)
     {
         if (_disposed) return;
 

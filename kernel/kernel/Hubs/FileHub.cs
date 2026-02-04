@@ -56,8 +56,14 @@ public class FileHub : Hub
             return;
         }
 
+
         var fullPath = Path.GetFullPath(directoryPath);
         var groupName = GetGroupName(fullPath);
+
+        if (_fileWatcherService.IsWatching(fullPath))
+        {
+            return;
+        }
 
         // Add this connection to the group
         await Groups.AddToGroupAsync(Context.ConnectionId, groupName);
@@ -92,6 +98,11 @@ public class FileHub : Hub
 
         var fullPath = Path.GetFullPath(directoryPath);
         var groupName = GetGroupName(fullPath);
+        
+        if (!_fileWatcherService.IsWatching(fullPath))
+        {
+            return;
+        }
 
         // Remove this connection from the group
         await Groups.RemoveFromGroupAsync(Context.ConnectionId, groupName);
@@ -104,6 +115,8 @@ public class FileHub : Hub
                 dirs.Remove(fullPath);
             }
         }
+        
+        _fileWatcherService.StopWatching(fullPath);
 
         _logger.LogInformation("Client {ConnectionId} stopped watching: {Path}",
             Context.ConnectionId, LogFormatter.ToYellow(fullPath));
@@ -158,21 +171,21 @@ public class FileHub : Hub
         _logger.LogInformation("Deleting directory: {DirPath}", LogFormatter.ToGreen(dirPath));
         _fileService.DeleteDirectory(dirPath);
     }
-    
+
     public void MoveDirectory(string sourcePath, string destPath)
     {
         _logger.LogInformation("Moving directory from {SourcePath} to {DestPath}",
             LogFormatter.ToGreen(sourcePath), LogFormatter.ToGreen(destPath));
         _fileService.MoveDirectory(sourcePath, destPath);
     }
-    
+
     public void RenameDirectory(string sourcePath, string destPath)
     {
         _logger.LogInformation("Renaming directory from {SourcePath} to {DestPath}",
             LogFormatter.ToGreen(sourcePath), LogFormatter.ToGreen(destPath));
         _fileService.MoveDirectory(sourcePath, destPath);
     }
-    
+
     public void CopyDirectory(string sourcePath, string destPath)
     {
         _logger.LogInformation("Copying directory from {SourcePath} to {DestPath}",
@@ -221,7 +234,7 @@ public class FileHub : Hub
     /// <param name="encoding">The encoding to use when saving (default: utf-8)</param>
     public async Task SaveFileAsync(string filePath, ChannelReader<string> stream, string encoding = "utf-8")
     {
-        _logger.LogInformation("Saving file: {FilePath} with encoding: {Encoding}", 
+        _logger.LogInformation("Saving file: {FilePath} with encoding: {Encoding}",
             LogFormatter.ToGreen(filePath), encoding);
         await _fileService.SaveFileAsync(filePath, stream, encoding);
     }
