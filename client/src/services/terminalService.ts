@@ -4,7 +4,6 @@ import { ensureServiceConnection} from "@/services/serviceConnection.ts";
 
 let terminalConnection: signalR.HubConnection | null = null
 let terminalConnectionUrl: string | null = null
-let connectionPromise: Promise<void> | null = null
 
 /**
  * Get or create the SignalR connection for terminal operations.
@@ -23,13 +22,11 @@ function getConnection(): signalR.HubConnection {
         if (terminalConnection) {
             terminalConnection.stop().then(() => {})
         }
-        console.log('Terminal Service Hub URL:', url)
         terminalConnection = new signalR.HubConnectionBuilder()
             .withUrl(url)
             .withAutomaticReconnect()
             .build()
         terminalConnectionUrl = url
-        connectionPromise = null
     }
 
     return terminalConnection
@@ -42,7 +39,7 @@ export { terminalConnection, getConnection as getTerminalConnection }
  */
 export async function initializeTerminal(terminalId: string, cwd: string): Promise<void> {
     const connection = getConnection()
-    await ensureServiceConnection(connection, connectionPromise)
+    await ensureServiceConnection(connection)
     try {
         await connection.invoke('TerminalInit', terminalId, cwd)
     } catch (err) {
@@ -55,7 +52,7 @@ export async function initializeTerminal(terminalId: string, cwd: string): Promi
  */
 export async function terminalInputAsync(terminalId: string, data: string): Promise<void> {
     const connection = getConnection()
-    await ensureServiceConnection(connection, connectionPromise)
+    await ensureServiceConnection(connection)
     try {
         await connection.invoke('TerminalInput', terminalId, data)
     } catch (err) {
@@ -68,7 +65,7 @@ export async function terminalInputAsync(terminalId: string, data: string): Prom
  */
 export async function closeTerminalSession(terminalId: string): Promise<void> {
     const connection = getConnection()
-    await ensureServiceConnection(connection, connectionPromise)
+    await ensureServiceConnection(connection)
     try {
         await connection.invoke('TerminalDisconnect', terminalId)
     } catch (err) {

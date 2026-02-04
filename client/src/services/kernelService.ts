@@ -4,7 +4,6 @@ import { ensureServiceConnection} from "@/services/serviceConnection.ts";
 
 let kernelConnection: signalR.HubConnection | null = null
 let kernelConnectionUrl: string | null = null
-let connectionPromise: Promise<void> | null = null
 
 /**
  * Get or create the SignalR connection for Python code execution.
@@ -23,13 +22,11 @@ function getConnection(): signalR.HubConnection {
         if (kernelConnection) {
             kernelConnection.stop().then(() => {})
         }
-        console.log('Kernel Service Hub URL:', url)
         kernelConnection = new signalR.HubConnectionBuilder()
             .withUrl(url)
             .withAutomaticReconnect()
             .build()
         kernelConnectionUrl = url
-        connectionPromise = null
     }
 
     return kernelConnection
@@ -39,7 +36,7 @@ export { kernelConnection, getConnection as getKernelConnection }
 
 export async function createPythonVenvAsync(venvPath: string, pythonInterpreterPath: string): Promise<void> {
     const connection = getConnection()
-    await ensureServiceConnection(connection, connectionPromise)
+    await ensureServiceConnection(connection)
     try {
         await connection.invoke('CreateVenvAsync', venvPath, pythonInterpreterPath)
     } catch (err) {
@@ -49,7 +46,7 @@ export async function createPythonVenvAsync(venvPath: string, pythonInterpreterP
 
 export async function executePythonCodeAsync(terminalId: string, code: string, pythonInterpreterPath: string, venvPath: string): Promise<void> {
     const connection = getConnection()
-    await ensureServiceConnection(connection, connectionPromise)
+    await ensureServiceConnection(connection)
     try {
         await connection.invoke('ExecuteCodeAsync', terminalId, code, pythonInterpreterPath, venvPath)
     } catch (err) {
@@ -59,7 +56,7 @@ export async function executePythonCodeAsync(terminalId: string, code: string, p
 
 export async function pythonInputAsync(terminalId: string, data: string): Promise<void> {
     const connection = getConnection()
-    await ensureServiceConnection(connection, connectionPromise)
+    await ensureServiceConnection(connection)
     try {
         await connection.invoke('PythonInput', terminalId, data)
     } catch (err) {

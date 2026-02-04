@@ -1,11 +1,10 @@
 ﻿import * as signalR from '@microsoft/signalr'
-import { useKernelStore } from '@/stores/kernel'
-import { ensureServiceConnection } from '@/services/serviceConnection.ts'
+import {useKernelStore} from '@/stores/kernel'
+import {ensureServiceConnection} from '@/services/serviceConnection.ts'
 import {FileNode, WorkspaceSettingsDTO, TabChunk} from '@/types/workspace'
 
 let fileServiceConnection: signalR.HubConnection | null = null
 let fileServiceConnectionUrl: string | null = null
-let connectionPromise: Promise<void> | null = null
 
 /**
  * Get or create the SignalR connection for file service operations.
@@ -22,29 +21,27 @@ function getConnection(): signalR.HubConnection {
 
     if (!fileServiceConnection || fileServiceConnectionUrl !== url) {
         if (fileServiceConnection) {
-            fileServiceConnection.stop().then(() => {})
+            fileServiceConnection.stop().then(() => {
+            })
         }
-        console.log('File Service Hub URL:', url)
         fileServiceConnection = new signalR.HubConnectionBuilder()
             .withUrl(url)
             .withAutomaticReconnect()
             .build()
         fileServiceConnectionUrl = url
-        connectionPromise = null  // Reset promise when connection is recreated
     }
 
     return fileServiceConnection
 }
 
-export { fileServiceConnection }
+export {fileServiceConnection}
 
 /**
  * Read directory contents via streaming.
  */
-export async function readDirectory(directoryPath: string)
-{
+export async function readDirectory(directoryPath: string) {
     const connection = getConnection()
-    await ensureServiceConnection(connection, connectionPromise)
+    await ensureServiceConnection(connection)
     return connection.stream<FileNode>('ReadDirAsync', directoryPath)
 }
 
@@ -53,7 +50,7 @@ export async function readDirectory(directoryPath: string)
  */
 export async function streamTab(filePath: string) {
     const connection = getConnection()
-    await ensureServiceConnection(connection, connectionPromise)
+    await ensureServiceConnection(connection)
     return connection.stream<TabChunk>('StreamTabAsync', filePath)
 }
 
@@ -65,7 +62,7 @@ export async function streamTab(filePath: string) {
  */
 export async function saveTabAsync(filePath: string, content: string, encoding: string = 'utf-8'): Promise<void> {
     const connection = getConnection()
-    await ensureServiceConnection(connection, connectionPromise)
+    await ensureServiceConnection(connection)
 
     const subject = new signalR.Subject<string>()
     const chunkSize = 64 * 1024
@@ -90,7 +87,7 @@ export async function saveTabAsync(filePath: string, content: string, encoding: 
  */
 export async function saveWorkspaceSettingsAsync(cwd: string, layout: WorkspaceSettingsDTO): Promise<void> {
     const connection = getConnection()
-    await ensureServiceConnection(connection, connectionPromise)
+    await ensureServiceConnection(connection)
     await connection.invoke("SaveWorkspaceSettingsAsync", cwd, layout)
 }
 
@@ -99,67 +96,67 @@ export async function saveWorkspaceSettingsAsync(cwd: string, layout: WorkspaceS
  */
 export async function loadLayoutAsync(dirPath: string): Promise<WorkspaceSettingsDTO | null> {
     const connection = getConnection()
-    await ensureServiceConnection(connection, connectionPromise)
+    await ensureServiceConnection(connection)
     return await connection.invoke<WorkspaceSettingsDTO | null>("LoadWorkspaceSettingsAsync", dirPath)
 }
 
 export async function createDirectory(dirPath: string): Promise<void> {
     const connection = getConnection()
-    await ensureServiceConnection(connection, connectionPromise)
+    await ensureServiceConnection(connection)
     await connection.send("CreateDirectory", dirPath)
 }
 
 export async function deleteDirectory(dirPath: string): Promise<void> {
     const connection = getConnection()
-    await ensureServiceConnection(connection, connectionPromise)
+    await ensureServiceConnection(connection)
     await connection.send("DeleteDirectory", dirPath)
 }
 
 export async function moveDirectory(sourcePath: string, destPath: string): Promise<void> {
     const connection = getConnection()
-    await ensureServiceConnection(connection, connectionPromise)
+    await ensureServiceConnection(connection)
     await connection.send("MoveDirectory", sourcePath, destPath)
 }
 
 export async function RenameDirectory(sourcePath: string, destPath: string): Promise<void> {
     const connection = getConnection()
-    await ensureServiceConnection(connection, connectionPromise)
+    await ensureServiceConnection(connection)
     await connection.send("RenameDirectory", sourcePath, destPath)
 }
 
 export async function copyDirectory(sourcePath: string, destPath: string): Promise<void> {
     const connection = getConnection()
-    await ensureServiceConnection(connection, connectionPromise)
+    await ensureServiceConnection(connection)
     await connection.send("CopyDirectory", sourcePath, destPath)
 }
 
 export async function createFile(filePath: string): Promise<void> {
     const connection = getConnection()
-    await ensureServiceConnection(connection, connectionPromise)
+    await ensureServiceConnection(connection)
     await connection.send("CreateFile", filePath)
 }
 
 export async function deleteFile(filePath: string): Promise<void> {
     const connection = getConnection()
-    await ensureServiceConnection(connection, connectionPromise)
+    await ensureServiceConnection(connection)
     await connection.send("DeleteFile", filePath)
 }
 
 export async function moveFile(sourcePath: string, destPath: string): Promise<void> {
     const connection = getConnection()
-    await ensureServiceConnection(connection, connectionPromise)
+    await ensureServiceConnection(connection)
     await connection.send("MoveFile", sourcePath, destPath)
 }
 
 export async function renameFile(sourcePath: string, destPath: string): Promise<void> {
     const connection = getConnection()
-    await ensureServiceConnection(connection, connectionPromise)
+    await ensureServiceConnection(connection)
     await connection.send("RenameFile", sourcePath, destPath)
 }
 
 export async function copyFile(sourcePath: string, destPath: string): Promise<void> {
     const connection = getConnection()
-    await ensureServiceConnection(connection, connectionPromise)
+    await ensureServiceConnection(connection)
     await connection.send("CopyFile", sourcePath, destPath)
 }
 
@@ -168,7 +165,7 @@ export async function copyFile(sourcePath: string, destPath: string): Promise<vo
  */
 export async function startWatching(directoryPath: string): Promise<void> {
     const connection = getConnection()
-    await ensureServiceConnection(connection, connectionPromise)
+    await ensureServiceConnection(connection)
     await connection.invoke("StartWatchingAsync", directoryPath)
 }
 
@@ -177,7 +174,7 @@ export async function startWatching(directoryPath: string): Promise<void> {
  */
 export async function stopWatching(directoryPath: string): Promise<void> {
     const connection = getConnection()
-    await ensureServiceConnection(connection, connectionPromise)
+    await ensureServiceConnection(connection)
     await connection.invoke("StopWatchingAsync", directoryPath)
 }
 

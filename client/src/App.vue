@@ -81,7 +81,6 @@ onMounted(async () => {
         const portReady = new Promise<void>((resolve) => {
             window.kernel.onPort((port) => {
                 kernelStore.setPort(port)
-                console.log(port)
                 resolve()
             })
         })
@@ -105,8 +104,6 @@ onMounted(async () => {
         // Initialize workspace with last working directory (after kernel port is ready)
         workspace.rootDirectory = await window.cwd.getCwd()
         workspace.displayRootDirectory = await window.cwd.getDisplayCwd()
-        console.log("root directory:", workspace.rootDirectory)
-        console.log("display root directory:", workspace.displayRootDirectory)
         await workspace.loadWorkspaceSettings()
 
         clearTimeout(timeout)

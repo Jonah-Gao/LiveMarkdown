@@ -1,51 +1,68 @@
-﻿import * as signalR from "@microsoft/signalr";
-import {HubConnection} from "@microsoft/signalr";
+﻿import * as signalR from '@microsoft/signalr'
+import {HubConnection} from '@microsoft/signalr'
 
-/**
- * Ensure the file service connection is established.
+/*
+ * Ensure that the given SignalR HubConnection is connected.
+ * If it is disconnected, it will start the connection.
+ * If it is connecting or reconnecting, it will wait until connected.
+ * Concurrent calls for the same connection will share the same start promise.
  */
-export async function ensureServiceConnection(connection: HubConnection, connectionPromise: Promise<void> | null): Promise<void> {
-    // If already connected, we're done
+
+const pending = new WeakMap<HubConnection, Promise<void>>()
+
+export async function ensureServiceConnection(connection: HubConnection): Promise<void> {
+    // already connected
     if (connection.state === signalR.HubConnectionState.Connected) {
         return
     }
 
-    // If a connection attempt is already in progress, wait for it
-    if (connectionPromise) {
-        await connectionPromise
+    // wait if a start is in progress
+    const existing = pending.get(connection)
+    if (existing) {
+        await existing
         return
     }
 
-    // If disconnected, start the connection
+    // if disconnected, start and track
     if (connection.state === signalR.HubConnectionState.Disconnected) {
-        connectionPromise = connection.start().finally(() => {
-            connectionPromise = null
+        const promise = connection.start().finally(() => {
+            pending.delete(connection)
         })
-        await connectionPromise
+
+        pending.set(connection, promise)
+        await promise
         return
     }
 
-    // If connecting or reconnecting, wait for it to complete
-    if (connection.state === signalR.HubConnectionState.Connecting ||
-        connection.state === signalR.HubConnectionState.Reconnecting) {
-        await new Promise<void>((resolve, reject) => {
-            const onClosed = (error?: Error) => {
-                reject(error || new Error('Connection closed while waiting'))
+    // connecting or reconnecting: wait until connected or fails
+    await new Promise<void>((resolve, reject) => {
+        const onClose = (err?: Error) => {
+            cleanup()
+            reject(err ?? new Error('Connection closed while waiting'))
+        }
+
+        const cleanup = () => {
+            connection.off('close', onClose)
+        }
+
+        connection.onclose(onClose)
+
+        const check = () => {
+            if (connection.state === signalR.HubConnectionState.Connected) {
+                cleanup()
+                resolve()
+            } else if (
+                connection.state === signalR.HubConnectionState.Disconnected
+            ) {
+                cleanup()
+                reject(
+                    new Error('Connection disconnected while waiting')
+                )
+            } else {
+                setTimeout(check, 50)
             }
-            connection.onclose(onClosed)
-            // Poll for connected state
-            const checkState = () => {
-                if (connection.state === signalR.HubConnectionState.Connected) {
-                    connection.off('close', onClosed)
-                    resolve()
-                } else if (connection.state === signalR.HubConnectionState.Disconnected) {
-                    connection.off('close', onClosed)
-                    reject(new Error('Connection disconnected while waiting'))
-                } else {
-                    setTimeout(checkState, 50)
-                }
-            }
-            checkState()
-        })
-    }
+        }
+
+        check()
+    })
 }

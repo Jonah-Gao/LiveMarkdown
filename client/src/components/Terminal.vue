@@ -8,11 +8,11 @@ import {useWorkspaceStore} from '@/stores/workspace'
 import {useKernelStore} from '@/stores/kernel'
 import {
     initializeTerminal,
-    ensureTerminalConnection,
     terminalInputAsync,
     getTerminalConnection,
     closeTerminalSession
 } from '@/services/terminalService.ts'
+import {ensureServiceConnection} from "@/services/serviceConnection.ts";
 import terminalTheme from '@/styles/GithubTerminalTheme.json'
 import {v4 as uuidv4} from 'uuid'
 
@@ -112,7 +112,8 @@ async function createTerminalTab(): Promise<void> {
 async function initializeXtermForTab(tab: TerminalTab): Promise<void> {
     if (!tab.containerRef) return
 
-    await ensureTerminalConnection()
+    const connection = getTerminalConnection()
+    await ensureServiceConnection(connection)
 
     tab.disposed = false
     tab.fitAddonLoaded = false
@@ -139,13 +140,19 @@ function disposeTabTerminal(tab: TerminalTab): void {
 
     // Dispose addon only if it was actually loaded for this terminal instance
     if (tab.fitAddon && tab.fitAddonLoaded) {
-        try { tab.fitAddon.dispose() } catch { /* noop */ }
+        try {
+            tab.fitAddon.dispose()
+        } catch { /* noop */
+        }
     }
     tab.fitAddon = null
     tab.fitAddonLoaded = false
 
     if (tab.xterm) {
-        try { tab.xterm.dispose() } catch { /* noop */ }
+        try {
+            tab.xterm.dispose()
+        } catch { /* noop */
+        }
     }
     tab.xterm = null
     tab.containerRef = null
@@ -216,10 +223,10 @@ onMounted(async () => {
         console.log('Terminal: Waiting for kernel...')
         return
     }
-    await ensureTerminalConnection()
-    const conn = getTerminalConnection()
-    conn.on('TerminalOutput', handleTerminalOutput)
-    conn.on('TerminalOutputSession', handleTerminalOutput)
+    const connection = getTerminalConnection()
+    await ensureServiceConnection(connection)
+    connection.on('TerminalOutput', handleTerminalOutput)
+    connection.on('TerminalOutputSession', handleTerminalOutput)
     window.addEventListener('resize', handleResize)
 
     // Create initial terminal tab

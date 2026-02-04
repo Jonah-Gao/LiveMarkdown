@@ -1,6 +1,6 @@
 ﻿import {computed, reactive, ref, watch} from 'vue'
 import {defineStore} from 'pinia'
-import {MarkdownParser} from '@markdown/markdown'
+import {MarkdownParser} from '@markdown/markdownVue3.ts'
 import {
     readDirectory,
     streamTab,

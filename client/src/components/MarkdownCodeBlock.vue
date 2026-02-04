@@ -1,5 +1,6 @@
 ﻿<script setup lang="ts">
-import {getKernelConnection, ensureKernelServiceConnection, executePythonCodeAsync, pythonInputAsync} from "@/services/kernelService.ts";
+import {getKernelConnection, executePythonCodeAsync, pythonInputAsync} from "@/services/kernelService.ts";
+import {ensureServiceConnection} from "@/services/serviceConnection.ts";
 import {onMounted, onUnmounted, ref, nextTick, watch} from "vue";
 import {Terminal} from "@xterm/xterm";
 import {FitAddon} from "@xterm/addon-fit";
@@ -24,7 +25,6 @@ let xterm: Terminal | null = null;
 let fitAddon: FitAddon | null = null;
 // Define callback reference for easier disposal later
 const onOutputReceived = (targetId: string, output: string) => {
-    console.log('[SignalR] Received:', output);
     if (terminalId !== targetId) return;
     // 1. Ensure container is visible
     if (mdTerminal.value && mdTerminal.value.style.display !== 'block') {
@@ -65,11 +65,11 @@ onMounted(async () => {
     }
 
     // 2. Register SignalR listener
-    await ensureKernelServiceConnection()
-    const conn = getKernelConnection()
-    conn.off('CodeOutput');
-    conn.on('CodeOutput', onOutputReceived);
-    conn.on('CodeExecutionCompleted', onCodeExecutionCompleted);
+    const connection = getKernelConnection()
+    await ensureServiceConnection(connection)
+    connection.off('CodeOutput');
+    connection.on('CodeOutput', onOutputReceived);
+    connection.on('CodeExecutionCompleted', onCodeExecutionCompleted);
 });
 onUnmounted(() => {
     // Cleanup
@@ -139,7 +139,6 @@ async function executeCodeBlock() {
 
 function copyCodeBlock() {
     navigator.clipboard.writeText(props.code).then(() => {
-        console.log('Code copied to clipboard')
     }).catch(err => {
         console.error('Failed to copy code: ', err)
     })
