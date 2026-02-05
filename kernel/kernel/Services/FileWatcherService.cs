@@ -9,6 +9,7 @@ namespace kernel.Services;
 public class FileWatcherService(ILogger<FileWatcherService> logger) : IDisposable
 {
     private readonly ConcurrentDictionary<string, FileSystemWatcher> _watchers = new();
+    private readonly ConcurrentDictionary<string, int> _watcherRefCounts = new();
     private readonly ConcurrentDictionary<string, CancellationTokenSource> _directoryDebounceTokens = new();
     private const int DirectoryDebounceMs = 200;
     private bool _disposed;
@@ -41,7 +42,8 @@ public class FileWatcherService(ILogger<FileWatcherService> logger) : IDisposabl
 
         if (_watchers.ContainsKey(fullPath))
         {
-            logger.LogDebug("Already watching directory: {Path}", fullPath);
+            _watcherRefCounts.AddOrUpdate(fullPath, 1, (_, count) => count + 1);
+            logger.LogDebug("Already watching directory: {Path} (ref count incremented)", fullPath);
             return true;
         }
 
@@ -63,6 +65,7 @@ public class FileWatcherService(ILogger<FileWatcherService> logger) : IDisposabl
 
             if (_watchers.TryAdd(fullPath, watcher))
             {
+                _watcherRefCounts[fullPath] = 1;
                 watcher.EnableRaisingEvents = true;
                 logger.LogInformation("Started watching directory: {Path}", fullPath);
                 return true;
@@ -88,15 +91,27 @@ public class FileWatcherService(ILogger<FileWatcherService> logger) : IDisposabl
 
         var fullPath = Path.GetFullPath(directoryPath);
 
-        if (_watchers.TryRemove(fullPath, out var watcher))
+        if (_watchers.TryGetValue(fullPath, out _))
         {
-            watcher.EnableRaisingEvents = false;
-            watcher.Created -= OnCreated;
-            watcher.Deleted -= OnDeleted;
-            watcher.Renamed -= OnRenamed;
-            watcher.Error -= OnError;
-            watcher.Dispose();
-            logger.LogInformation("Stopped watching directory: {Path}", fullPath);
+            var remaining = _watcherRefCounts.AddOrUpdate(fullPath, 0, (_, count) => Math.Max(count - 1, 0));
+            if (remaining > 0)
+            {
+                return;
+            }
+
+            _watcherRefCounts.TryRemove(fullPath, out _);
+        
+
+            if (_watchers.TryRemove(fullPath, out var watcher))
+            {
+                watcher.EnableRaisingEvents = false;
+                watcher.Created -= OnCreated;
+                watcher.Deleted -= OnDeleted;
+                watcher.Renamed -= OnRenamed;
+                watcher.Error -= OnError;
+                watcher.Dispose();
+                logger.LogInformation("Stopped watching directory: {Path}", fullPath);
+            }
         }
     }
 
@@ -245,6 +260,7 @@ public class FileWatcherService(ILogger<FileWatcherService> logger) : IDisposabl
                 }
             }
             _watchers.Clear();
+            _watcherRefCounts.Clear();
         }
 
         _disposed = true;

@@ -8,7 +8,7 @@ using Microsoft.AspNetCore.Hosting.Server.Features;
 
 // Application entry point and configuration.
 // - Configures minimal web app, CORS and SignalR hubs
-// - Sets up console logging with timestamps and colours
+// - Sets up console logging with timestamps and colors
 // - Maps SignalR hub endpoints
 
 var builder = WebApplication.CreateBuilder(args);

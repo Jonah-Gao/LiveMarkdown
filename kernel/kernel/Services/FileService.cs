@@ -590,7 +590,7 @@ public class FileService(ILogger<FileService> logger)
             return;
         }
 
-        // Normalise and validate path
+        // Normalize and validate path
         var fullPath = Path.GetFullPath(filePath);
         var dir = Path.GetDirectoryName(fullPath);
         if (string.IsNullOrEmpty(dir))
@@ -658,7 +658,7 @@ public class FileService(ILogger<FileService> logger)
             return;
         }
 
-        // Normalise and validate path
+        // Normalize and validate path
         var fullPath = Path.GetFullPath(cwd);
         var settingsDir = Path.Combine(fullPath, ".LiveMarkdown");
         var settingsFile = Path.Combine(settingsDir, "settings.json");
@@ -712,7 +712,7 @@ public class FileService(ILogger<FileService> logger)
             return null;
         }
 
-        // Normalise and validate path
+        // Normalize and validate path
         var fullPath = Path.GetFullPath(cwd);
         var settingsFile = Path.Join(fullPath, ".LiveMarkdown", "settings.json");
         if (!File.Exists(settingsFile))

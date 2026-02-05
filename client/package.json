@@ -28,10 +28,12 @@
     "vue": "^3.4.21"
   },
   "devDependencies": {
+    "@types/jsdom": "^27.0.0",
     "@types/markdown-it": "^14.1.2",
     "@vitejs/plugin-vue": "^5.0.4",
     "electron": "^30.0.1",
     "electron-builder": "^24.13.3",
+    "jsdom": "^28.0.0",
     "typescript": "^5.2.2",
     "vite": "^5.1.6",
     "vite-plugin-electron": "^0.28.6",

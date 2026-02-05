@@ -11,7 +11,7 @@ namespace kernel.Hubs;
 public class TerminalHub(TerminalService terminalService, ILogger<TerminalHub> logger) : Hub
 {
     /// <summary>
-    /// Initialise a new terminal session for the connection.
+    /// Initialize a new terminal session for the connection.
     /// </summary>
     public async Task TerminalInit(string terminalId, string cwd)
     {
