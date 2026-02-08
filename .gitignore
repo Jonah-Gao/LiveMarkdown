@@ -112,5 +112,4 @@ pids
 .yarn-integrity
 TextEditorPlan.md
 test
-docs
-kernel
+client/kernel
