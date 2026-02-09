@@ -134,6 +134,17 @@ public class FileWatcherService(ILogger<FileWatcherService> logger) : IDisposabl
         }
     }
 
+    /// <summary>
+    /// Check if a directory is being watched.
+    /// </summary>
+    public bool IsWatching(string directoryPath)
+    {
+        if (string.IsNullOrWhiteSpace(directoryPath)) return false;
+        if (_disposed) return false;
+        var fullPath = Path.GetFullPath(directoryPath);
+        return _watchers.ContainsKey(fullPath);
+    }
+
     private void OnCreated(object sender, FileSystemEventArgs e)
     {
         try
