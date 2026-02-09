@@ -27,8 +27,8 @@ public class FileService(ILogger<FileService> logger)
         [property: UsedImplicitly] string Name,
         [property: UsedImplicitly] string Path,
         [property: UsedImplicitly] string Extension,
-        [property: UsedImplicitly] bool IsDirectory,
         [property: UsedImplicitly] string ParentPath,
+        [property: UsedImplicitly] bool IsDirectory,
         [property: UsedImplicitly] bool Expanded = false
     );
 
@@ -65,7 +65,6 @@ public class FileService(ILogger<FileService> logger)
     {
         [UsedImplicitly][EnumMember(Value = "explorer")] Explorer,
         [UsedImplicitly][EnumMember(Value = "search")] Search,
-        [UsedImplicitly][EnumMember(Value = "run")] Run,
         [UsedImplicitly][EnumMember(Value = "terminal")] Terminal
     }
 
