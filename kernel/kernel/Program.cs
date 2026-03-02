@@ -85,7 +85,7 @@ app.UseCors();
 app.UseRouting();
 
 // Map SignalR hubs
-app.MapHub<PythonHub>("/kernelHub");
+app.MapHub<PythonHub>("/pythonHub");
 app.MapHub<TerminalHub>("/terminalHub");
 app.MapHub<FileHub>("/fileHub");
 

@@ -4,6 +4,7 @@
  */
 class Preprocessor {
     private newlinesPattern = /\r\n|\r|\n/g;
+    private tabPattern = /\t/g;
 
     /**
      * Preprocesses the input string.
@@ -13,14 +14,12 @@ class Preprocessor {
      */
     preprocess(input: string): string {
         // Normalize newlines to \n
-        let normalized = input.replace(this.newlinesPattern, '\n');
-
         // Remove leading and trailing empty lines and replace null characters with U+FFFD
-        normalized = normalized.replace(/^\n+/, '')
+        return input.replace(this.newlinesPattern, '\n')
+            .replace(this.tabPattern, '    ')
+            .replace(/^\n+/, '')
             .replace(/\n+$/, '')
             .replace(/\x00/g, "\uFFFD");
-
-        return normalized;
     }
 }
 

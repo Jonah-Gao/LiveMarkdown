@@ -14,9 +14,6 @@ namespace kernel.Services;
 /// Service for file system operations including reading directories,
 /// streaming file content, and managing workspace settings.
 /// </summary>
-/// <remarks>
-/// TODO: Directory watching to auto-refresh file tree and open tabs on changes
-/// </remarks>
 public class FileService(ILogger<FileService> logger)
 {
     /// <summary>

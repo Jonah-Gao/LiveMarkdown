@@ -606,27 +606,25 @@ button.primary:hover {
     margin-bottom: 1rem;
 }
 
-/* 顶部工具栏 */
 .md-code-actions {
     position: absolute;
     top: 2px;
     right: 4px;
     display: flex;
-    gap: 4px; /* 按钮之间的间距 */
-    z-index: 10; /* 保证浮在代码上方 */
+    gap: 4px; /* gap between buttons */
+    z-index: 10;
 }
 
-/* 将 div 用作按钮的样式 */
 .md-icon-btn {
     display: flex;
     align-items: center;
     justify-content: center;
-    cursor: pointer; /* 鼠标变为手型 */
+    cursor: pointer;
     padding: 2px;
     border-radius: 4px;
     color: #abb2bf;
     transition: background 0.2s, color 0.2s;
-    user-select: none; /* 防止双击选中图标文本 */
+    user-select: none;
 }
 
 .md-icon-btn:hover {
@@ -648,12 +646,14 @@ button.primary:hover {
     color: #fff;
 }
 
-/* 图标大小微调 */
+/* icon size */
+
 .material-icons {
     font-size: 20px;
 }
 
-/* 代码区域 */
+/* code */
+
 pre {
     margin: 0;
     /*padding: 16px;*/
@@ -661,17 +661,18 @@ pre {
     color: #abb2bf;
 }
 
-/* 结果输出区域 */
+/* result output */
+
 .md-output-console {
-    display: none; /* 默认隐藏 */
+    display: none; /* hidden by default */
     padding: 12px 16px;
-    background: transparent; /* 深色背景示例 */
+    background: transparent;
     border-top: 1px solid var(--widget-border-color);
-    color: var(--text-primary); /* 绿色输出文字 */
+    color: var(--text-primary);
     font-size: 0.9rem;
     white-space: pre-wrap;
 }
 
-.markdown-body .md-output-console p{
+.markdown-body .md-output-console p {
     margin-bottom: 0;
 }

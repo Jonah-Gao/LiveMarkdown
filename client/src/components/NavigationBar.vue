@@ -2,7 +2,7 @@
 import {onBeforeUnmount, onMounted, ref} from 'vue'
 import {useWorkspaceStore} from '@/stores/workspace'
 import {createDirectory} from "@/services/fileService.ts";
-import {createPythonVenvAsync} from "@/services/kernelService.ts";
+import {createPythonVenvAsync} from "@/services/pythonService.ts";
 
 const workspace = useWorkspaceStore()
 

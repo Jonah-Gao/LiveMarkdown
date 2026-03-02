@@ -40,7 +40,7 @@ class Lexer {
     ];
 
     private leafBlockRules: Array<[TokenType, RegExp]> = [
-        [TokenType.INDENTED_CODE_BLOCK, /^( {4,})(\S+)/],
+        [TokenType.INDENTED_CODE_BLOCK, /^( {4})(.+)/],
         [TokenType.CODE_BLOCK, /^( {0,3})(`{3,}) *([^\s`]+)?(?:\n|$)/],
         [TokenType.HEADING, /^(#{1,6})\s/],
         [TokenType.HR, /^ {0,3}((_ *){3,}|(- *){3,}|(\* *){3,})(?:\n|$)/],
@@ -460,7 +460,7 @@ class Lexer {
             // No emphasis found, return as plain text
             return text ? [{
                 type: TokenType.TEXT,
-                raw: text,
+                raw: text.replace(/^ +| +$/gm, ''),
                 text: text
             }] : [];
         }
@@ -1018,6 +1018,4 @@ class Lexer {
 
 }
 
-const lexer = new Lexer();
-lexer.tokenize("    abc");
 export {Lexer};

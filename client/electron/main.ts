@@ -5,7 +5,7 @@
  * Supports both development and production environments.
  */
 
-import {app, BrowserWindow, Menu, ipcMain} from 'electron'
+import {app, BrowserWindow, Menu, ipcMain, shell} from 'electron'
 import {fileURLToPath} from 'node:url'
 import {spawn, ChildProcess} from 'child_process';
 import path from 'node:path'
@@ -287,6 +287,12 @@ ipcMain.on('win:can-close', () => {
     mainWindow.close()
 })
 
+// Open external links in the system default browser.
+ipcMain.on('open-external-url', async (_event, url) => {
+    if (!/^https?:\/\//i.test(url)) return
+    await shell.openExternal(url)
+})
+
 // =============================================================================
 // IPC Handlers - Workspace
 // =============================================================================
@@ -363,7 +369,7 @@ app.whenReady().then(async () => {
 })
 
 /**
- * Handle uncaught exceptions gracefully
+ * Handle uncaught exceptions
  */
 process.on('uncaughtException', (error) => {
     console.error('[Electron] Uncaught exception:', error)

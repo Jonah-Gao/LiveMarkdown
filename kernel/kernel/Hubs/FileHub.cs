@@ -37,6 +37,16 @@ public class FileHub : Hub
     }
 
 
+    /// <summary>
+    /// Called by FileWatcherService when a directory change is detected.
+    /// Broadcasts to clients watching that directory.
+    /// </summary>
+    /// <param name="rootPath">
+    /// the top-level directory being watched (the one clients subscribe to).
+    /// </param>
+    /// <param name="dirPath">
+    /// dirPath is the specific directory that changed (could be rootPath or a subdirectory
+    /// </param>
     private void OnDirectoryDirty(string rootPath, string dirPath)
     {
         var groupName = GetGroupName(rootPath);
@@ -159,7 +169,6 @@ public class FileHub : Hub
     /// <summary>
     /// Create a new directory.
     /// </summary>
-    /// <param name="dirPath"></param>
     public void CreateDirectory(string dirPath)
     {
         _logger.LogInformation("Creating directory: {DirPath}", LogFormatter.ToGreen(dirPath));

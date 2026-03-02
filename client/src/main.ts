@@ -5,8 +5,8 @@
  * and sets up communication with the Electron main process.
  */
 
-import { createApp } from 'vue'
-import { createPinia } from 'pinia'
+import {createApp} from 'vue'
+import {createPinia} from 'pinia'
 import './styles/style.css'
 import 'material-symbols'
 import App from './App.vue'
@@ -91,6 +91,75 @@ function setupElectronIPC() {
 }
 
 /**
+ * Intercept external link clicks and open them in the system browser.
+ */
+function setupExternalLinkHandler() {
+    const nativeWindowOpen = window.open.bind(window)
+    window.open = (url, target, features) => {
+        const u = typeof url === 'string' ? url : String(url ?? '')
+        if (/^https?:\/\//i.test(u) && isElectron && window.ipcRenderer) {
+            window.ipcRenderer.send('open-external-url', u)
+            return null
+        }
+        return nativeWindowOpen(url, target, features)
+    }
+
+    const normalizeExternalHref = (raw: any) => {
+        if (!raw) return null
+        let s = raw.trim()
+
+        // If starts with "www.", prepend https://
+        if (/^www\./i.test(s)) s = `https://${s}`
+
+        // If looks like domain but missing protocol, prepend https://
+        if (!/^[a-zA-Z][a-zA-Z\d+\-.]*:/.test(s) && /^[\w-]+(\.[\w-]+)+([/?#].*)?$/.test(s)) {
+            s = `https://${s}`
+        }
+
+        try {
+            const u = new URL(s)
+            if (u.protocol !== 'http:' && u.protocol !== 'https:') return null
+            return u.toString()
+        } catch {
+            return null
+        }
+    }
+
+    const handleLinkEvent = (event: any) => {
+        if (event.defaultPrevented) return
+        if (event.type === 'click' && event.button !== 0) return
+        if (event.type === 'auxclick' && event.button !== 1) return
+
+        const target = event.target
+        if (!(target instanceof Element)) return
+
+        const anchor = target.closest('a[href]')
+        if (!(anchor instanceof HTMLAnchorElement)) return
+
+        const hrefAttr = anchor.getAttribute('href') || ''
+        if (!hrefAttr || hrefAttr.startsWith('#')) return
+
+        const external = normalizeExternalHref(hrefAttr)
+        if (!external) return
+
+        event.preventDefault()
+        event.stopPropagation()
+        if (typeof event.stopImmediatePropagation === 'function') {
+            event.stopImmediatePropagation()
+        }
+
+        if (isElectron && window.ipcRenderer) {
+            window.ipcRenderer.send('open-external-url', external)
+        } else {
+            nativeWindowOpen(external, '_blank', 'noopener,noreferrer')
+        }
+    }
+
+    document.addEventListener('click', handleLinkEvent, true)
+    document.addEventListener('auxclick', handleLinkEvent, true)
+}
+
+/**
  * Mount the application to the DOM.
  */
 function mountApp(app: ReturnType<typeof createApp>) {
@@ -99,11 +168,13 @@ function mountApp(app: ReturnType<typeof createApp>) {
     app.mount(mountPoint).$nextTick(() => {
         // Application is now mounted and ready
         setupElectronIPC()
+        setupExternalLinkHandler()
 
         if (isDev) {
             console.log('[App] Application mounted successfully')
         }
-    }).then(() => {})
+    }).then(() => {
+    })
 }
 
 // =============================================================================

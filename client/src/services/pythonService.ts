@@ -16,7 +16,7 @@ function getConnection(): signalR.HubConnection {
         throw new Error('Kernel not running - no port available')
     }
 
-    const url = `${baseUrl}/kernelHub`
+    const url = `${baseUrl}/pythonHub`
 
     if (!kernelConnection || kernelConnectionUrl !== url) {
         if (kernelConnection) {

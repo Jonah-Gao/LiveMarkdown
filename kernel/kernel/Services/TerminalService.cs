@@ -16,9 +16,6 @@ namespace kernel.Services;
 /// - Accept input and control commands (resize, kill)
 /// - Track active terminals and cancellation tokens per connection
 /// </summary>
-/// <remarks>
-/// TODO: Fix auto-inserted newline when typing the first two characters after launching the terminal
-/// </remarks>
 public class TerminalService(ILogger<TerminalService> logger, IHubContext<TerminalHub> hubContext)
 {
     private readonly ConcurrentDictionary<string, IPtyConnection> _terminals = new();

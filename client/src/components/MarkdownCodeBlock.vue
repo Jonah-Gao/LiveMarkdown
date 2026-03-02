@@ -1,5 +1,5 @@
 ﻿<script setup lang="ts">
-import {getKernelConnection, executePythonCodeAsync, pythonInputAsync} from "@/services/kernelService.ts";
+import {getKernelConnection, executePythonCodeAsync, pythonInputAsync} from "@/services/pythonService.ts";
 import {ensureServiceConnection} from "@/services/serviceConnection.ts";
 import {onMounted, onUnmounted, ref, nextTick, watch} from "vue";
 import {Terminal} from "@xterm/xterm";

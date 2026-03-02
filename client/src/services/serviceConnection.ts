@@ -59,6 +59,9 @@ export async function ensureServiceConnection(connection: HubConnection): Promis
                     new Error('Connection disconnected while waiting')
                 )
             } else {
+
+
+
                 setTimeout(check, 50)
             }
         }
