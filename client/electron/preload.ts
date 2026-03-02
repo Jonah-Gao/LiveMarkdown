@@ -28,12 +28,25 @@ contextBridge.exposeInMainWorld("nodePath", {
     join: (...args: string[]): string => path.join(...args),
     dirname: (p: string): string => path.dirname(p),
     basename: (p: string, ext?: string): string => path.basename(p, ext),
+    /**
+     * Normalize path and convert to lowercase for storage/comparison (Windows case-insensitive).
+     */
     normalize: (p: string): string => {
         let n = path.normalize(p)
         if (n.length > 1 && n.endsWith(path.sep)) {
             n = n.slice(0,-1)
         }
         return n.toLowerCase()
+    },
+    /**
+     * Normalize path preserving original case for display.
+     */
+    normalizeDisplay: (p: string): string => {
+        let n = path.normalize(p)
+        if (n.length > 1 && n.endsWith(path.sep)) {
+            n = n.slice(0,-1)
+        }
+        return n
     }
 })
 
@@ -42,6 +55,7 @@ contextBridge.exposeInMainWorld('windowControls', {
     maximize: () => ipcRenderer.send('win:maximize'),
     close: () => ipcRenderer.send('win:close'),
     canClose: () => ipcRenderer.send('win:can-close'),
+    appReady: () => ipcRenderer.send('app:ready'),
 
     onMaximize: (cb: (maximized: boolean) => void) => {
         ipcRenderer.on('win:maximized', (_e, v) => cb(v))
@@ -53,5 +67,20 @@ contextBridge.exposeInMainWorld('windowControls', {
 
 contextBridge.exposeInMainWorld("cwd", {
     setCwd: (cwd: string) => ipcRenderer.send("cwd:set", cwd),
-    getCwd: () => ipcRenderer.invoke("cwd:get")
+    getCwd: () => ipcRenderer.invoke("cwd:get"),
+    setDisplayCwd: (cwd: string) => ipcRenderer.send("cwd:set-display", cwd),
+    getDisplayCwd: () => ipcRenderer.invoke("cwd:get-display")
+})
+
+contextBridge.exposeInMainWorld("kernel", {
+    start: () => ipcRenderer.send("kernel:start"),
+    stop: () => ipcRenderer.send("kernel:stop"),
+    getPort: () => ipcRenderer.invoke("kernel:get-port"),
+    getStatus: () => ipcRenderer.invoke("kernel:get-status"),
+    onPort: (cb: (port: number) => void) => {
+        ipcRenderer.on("kernel:port", (_e, port) => cb(port))
+    },
+    onStatus: (cb: (status: string, error?: string) => void) => {
+        ipcRenderer.on("kernel:status", (_e, status, error) => cb(status, error))
+    }
 })

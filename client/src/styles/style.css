@@ -138,22 +138,35 @@ body {
 /* ===========================================
    SIDEBAR & TOOLBAR
    =========================================== */
-.view-content {
-    display: block;
-    width: 240px;
+.sidebar-panel {
+    display: flex;
+    flex-direction: column;
     min-width: 160px;
     flex-shrink: 0;
-    border-right: 1px solid var(--widget-border-color);
     background-color: var(--bg-tertiary);
-    transition: width var(--transition-normal);
+    overflow: hidden;
+    contain: strict;
+}
+
+.view-content {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    height: 100%;
+    flex-shrink: 0;
+    background-color: var(--bg-tertiary);
+    contain: layout style;
 }
 
 .vertical-resizer {
     position: relative;
-    width: 12px;
-    cursor: col-resize;
+    width: 8px;
+    cursor: ew-resize;
     background-color: transparent;
     flex-shrink: 0;
+    z-index: 10;
+    margin-left: -4px;
+    margin-right: -4px;
 }
 
 .vertical-resizer::after {
@@ -162,14 +175,9 @@ body {
     top: 0;
     bottom: 0;
     left: 50%;
-    width: 2px;
+    width: 1px;
     transform: translateX(-50%);
     background-color: var(--widget-border-color);
-    border-radius: 2px;
-}
-
-.vertical-resizer:hover::after {
-    background-color: rgba(255, 255, 255, 0.2);
 }
 
 .tool-bar {
@@ -262,7 +270,7 @@ body {
     padding: 0 8px 0 14px;
     cursor: default;
     user-select: none;
-    border-bottom: 1px solid var(--widget-border-color);
+    /*border-bottom: 1px solid var(--widget-border-color);*/
     background-color: var(--bg-tertiary);
 }
 
@@ -306,157 +314,6 @@ body {
 .title-action span {
     font-size: 18px;
     font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 18;
-}
-
-/* ===========================================
-   TABS
-   =========================================== */
-.tab-bar {
-    display: flex;
-    height: 35px;
-    background-color: var(--bg-tertiary);
-    border-bottom: 1px solid var(--widget-border-color);
-    overflow: hidden;
-    align-items: stretch;
-}
-
-.tab-list {
-    display: flex;
-    flex: 1;
-    overflow-x: auto;
-    scrollbar-width: none;
-}
-
-.tab-list::-webkit-scrollbar {
-    display: none;
-}
-
-.tab {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    min-width: 120px;
-    max-width: 200px;
-    height: 100%;
-    padding: 0 4px 0 14px;
-    font-size: 13px;
-    color: var(--text-secondary);
-    background-color: transparent;
-    border-right: 1px solid var(--widget-border-color);
-    cursor: pointer;
-    position: relative;
-    transition: background-color var(--transition-fast), color var(--transition-fast);
-}
-
-.tab:hover {
-    background-color: rgba(255, 255, 255, 0.03);
-    color: var(--text-primary);
-}
-
-.tab.active {
-    color: var(--text-primary);
-    background-color: var(--bg-secondary);
-}
-
-.tab.active::after {
-    content: '';
-    position: absolute;
-    bottom: 0;
-    left: 0;
-    right: 0;
-    height: 1px;
-    background-color: var(--bg-secondary);
-}
-
-.tab.active::before {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    height: 1px;
-    background-color: var(--accent-color-secondary);
-}
-
-.tab span {
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    flex: 1;
-}
-
-.tab-action {
-    display: flex;
-    height: 20px;
-    width: 20px;
-    margin-left: 4px;
-    justify-content: center;
-    text-align: center;
-    align-items: center;
-    cursor: pointer;
-    user-select: none;
-    border-radius: var(--border-radius-sm);
-    color: var(--text-muted);
-    opacity: 0;
-    transition: opacity var(--transition-fast), background-color var(--transition-fast), color var(--transition-fast);
-}
-
-.tab:hover .tab-action,
-.tab.active .tab-action {
-    opacity: 1;
-}
-
-.tab-action:hover {
-    background-color: var(--button-hover);
-    color: var(--text-primary);
-}
-
-.tab-action span {
-    font-size: 16px;
-    font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 16;
-}
-
-.tab-view-toggle {
-    display: flex;
-    align-items: center;
-    padding: 0 8px;
-    gap: 4px;
-    background-color: var(--bg-tertiary);
-}
-
-.tab-view-btn {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 24px;
-    height: 24px;
-    border-radius: var(--border-radius-sm);
-    background-color: transparent;
-    cursor: pointer;
-    color: var(--text-secondary);
-    transition: background-color var(--transition-fast), color var(--transition-fast), border-color var(--transition-fast);
-    padding: 0;
-}
-
-.tab-view-btn:hover {
-    color: var(--text-primary);
-    border-color: var(--text-muted);
-    background-color: var(--button-hover);
-}
-
-.tab-view-btn.active {
-    color: var(--text-primary);
-    border-color: var(--accent-color);
-}
-
-.tab-view-btn .material-symbols-outlined {
-    font-size: 20px;
-    font-variation-settings: 'FILL' 0, 'wght' 500, 'GRAD' 0, 'opsz' 20;
-}
-
-.tab-view-btn.active .material-symbols-outlined {
-    color: var(--accent-color);
-    font-variation-settings: 'FILL' 1, 'wght' 600, 'GRAD' 0, 'opsz' 20;
 }
 
 /* ===========================================
@@ -506,13 +363,16 @@ button.primary:hover {
 }
 
 /* ===========================================
-   EDITOR CONTAINER & LAYOUT
+   EDITOR CONTAINER & LAYOUT - Partial moved to Editor.vue
    =========================================== */
 .editor-container {
     flex: 1;
     display: flex;
     flex-direction: column;
     background-color: var(--bg-secondary);
+    min-height: 0;
+    min-width: 0;
+    overflow: hidden;
 }
 
 .editor {
@@ -523,41 +383,18 @@ button.primary:hover {
     align-items: stretch;
 }
 
-.editor-main {
-    display: flex;
-    flex: 1 1 auto;
-    min-width: 0;
-    overflow: hidden;
-}
-
-.code-editor {
-    width: 100%;
-    height: 100%;
-    min-width: 0;
-}
-
-.editor-main .monaco-editor,
-.editor-main .monaco-editor .overflow-guard {
-    max-width: 100%;
-}
-
 /* ===========================================
-   PREVIEW PANEL
+   PREVIEW PANEL - Moved to Preview.vue scoped styles
    =========================================== */
-.preview-main {
-    display: flex;
-    flex-direction: column;
-    flex: 1 1 auto;
-    min-width: 0;
-    background-color: var(--bg-secondary);
-    overflow: hidden;
-}
 
 .split-resizer {
     position: relative;
-    width: 12px;
-    cursor: col-resize;
+    width: 8px;
+    cursor: ew-resize;
     background-color: transparent;
+    z-index: 10;
+    margin-left: -4px;
+    margin-right: -4px;
 }
 
 .split-resizer::after {
@@ -566,43 +403,24 @@ button.primary:hover {
     top: 0;
     bottom: 0;
     left: 50%;
-    width: 2px;
+    width: 1px;
     transform: translateX(-50%);
     background-color: var(--widget-border-color);
-    border-radius: 2px;
-}
-
-.split-resizer:hover::after {
-    background-color: rgba(255, 255, 255, 0.2);
-}
-
-.markdown-body {
-    width: 100%;
-    flex: 1;
-    display: block;
-    padding: 24px 48px;
-    overflow-y: auto;
-    background-color: var(--bg-secondary);
 }
 
 /* ===========================================
-   TERMINAL
+   TERMINAL - Moved to Terminal.vue scoped styles
    =========================================== */
-.terminal-container {
-    display: flex;
-    flex-direction: column;
-    min-height: 150px;
-    max-height: 80vh;
-    background-color: var(--bg-tertiary);
-    overflow: hidden;
-}
 
 .horizontal-resizer {
     position: relative;
-    height: 12px;
-    cursor: row-resize;
+    height: 8px;
+    cursor: ns-resize;
     background-color: transparent;
     flex-shrink: 0;
+    z-index: 10;
+    margin-top: -4px;
+    margin-bottom: -4px;
 }
 
 .horizontal-resizer::after {
@@ -611,58 +429,9 @@ button.primary:hover {
     left: 0;
     right: 0;
     top: 50%;
-    height: 2px;
+    height: 1px;
     transform: translateY(-50%);
     background-color: var(--widget-border-color);
-}
-
-.horizontal-resizer:hover::after {
-    background-color: rgba(255, 255, 255, 0.2);
-}
-
-.terminal-title-bar {
-    display: flex;
-    height: 35px;
-    padding: 0 12px;
-    font-size: 12px;
-    align-items: center;
-    cursor: default;
-    user-select: none;
-    flex-shrink: 0;
-    background-color: var(--bg-tertiary);
-    border-bottom: 1px solid var(--widget-border-color);
-    gap: 12px;
-}
-
-.terminal-title {
-    display: flex;
-    align-items: center;
-    height: 100%;
-    padding: 0 2px;
-    color: var(--text-primary);
-    font-weight: 500;
-    position: relative;
-}
-
-.terminal-title::after {
-    content: '';
-    position: absolute;
-    bottom: 0;
-    left: 0;
-    right: 0;
-    height: 1px;
-    background-color: var(--accent-color-secondary);
-}
-
-.terminal-title span {
-    padding: 0;
-    box-shadow: none;
-}
-
-.terminal-host {
-    flex: 1;
-    overflow: hidden;
-    background-color: var(--bg-tertiary);
 }
 
 .terminal-host .xterm {
@@ -837,27 +606,25 @@ button.primary:hover {
     margin-bottom: 1rem;
 }
 
-/* 顶部工具栏 */
 .md-code-actions {
     position: absolute;
     top: 2px;
     right: 4px;
     display: flex;
-    gap: 4px; /* 按钮之间的间距 */
-    z-index: 10; /* 保证浮在代码上方 */
+    gap: 4px; /* gap between buttons */
+    z-index: 10;
 }
 
-/* 将 div 用作按钮的样式 */
 .md-icon-btn {
     display: flex;
     align-items: center;
     justify-content: center;
-    cursor: pointer; /* 鼠标变为手型 */
+    cursor: pointer;
     padding: 2px;
     border-radius: 4px;
     color: #abb2bf;
     transition: background 0.2s, color 0.2s;
-    user-select: none; /* 防止双击选中图标文本 */
+    user-select: none;
 }
 
 .md-icon-btn:hover {
@@ -879,12 +646,14 @@ button.primary:hover {
     color: #fff;
 }
 
-/* 图标大小微调 */
+/* icon size */
+
 .material-icons {
     font-size: 20px;
 }
 
-/* 代码区域 */
+/* code */
+
 pre {
     margin: 0;
     /*padding: 16px;*/
@@ -892,18 +661,18 @@ pre {
     color: #abb2bf;
 }
 
-/* 结果输出区域 */
+/* result output */
+
 .md-output-console {
-    display: none; /* 默认隐藏 */
+    display: none; /* hidden by default */
     padding: 12px 16px;
-    background: transparent; /* 深色背景示例 */
+    background: transparent;
     border-top: 1px solid var(--widget-border-color);
-    color: var(--text-primary); /* 绿色输出文字 */
+    color: var(--text-primary);
     font-size: 0.9rem;
     white-space: pre-wrap;
 }
 
-.markdown-body .md-output-console p{
+.markdown-body .md-output-console p {
     margin-bottom: 0;
 }
-

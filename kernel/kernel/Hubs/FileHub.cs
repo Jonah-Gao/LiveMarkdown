@@ -37,6 +37,16 @@ public class FileHub : Hub
     }
 
 
+    /// <summary>
+    /// Called by FileWatcherService when a directory change is detected.
+    /// Broadcasts to clients watching that directory.
+    /// </summary>
+    /// <param name="rootPath">
+    /// the top-level directory being watched (the one clients subscribe to).
+    /// </param>
+    /// <param name="dirPath">
+    /// dirPath is the specific directory that changed (could be rootPath or a subdirectory
+    /// </param>
     private void OnDirectoryDirty(string rootPath, string dirPath)
     {
         var groupName = GetGroupName(rootPath);
@@ -56,8 +66,14 @@ public class FileHub : Hub
             return;
         }
 
+
         var fullPath = Path.GetFullPath(directoryPath);
         var groupName = GetGroupName(fullPath);
+
+        if (_fileWatcherService.IsWatching(fullPath))
+        {
+            return;
+        }
 
         // Add this connection to the group
         await Groups.AddToGroupAsync(Context.ConnectionId, groupName);
@@ -70,6 +86,7 @@ public class FileHub : Hub
                 dirs = [];
                 ConnectionWatchedDirs[Context.ConnectionId] = dirs;
             }
+
             dirs.Add(fullPath);
         }
 
@@ -91,6 +108,11 @@ public class FileHub : Hub
 
         var fullPath = Path.GetFullPath(directoryPath);
         var groupName = GetGroupName(fullPath);
+        
+        if (!_fileWatcherService.IsWatching(fullPath))
+        {
+            return;
+        }
 
         // Remove this connection from the group
         await Groups.RemoveFromGroupAsync(Context.ConnectionId, groupName);
@@ -103,6 +125,8 @@ public class FileHub : Hub
                 dirs.Remove(fullPath);
             }
         }
+        
+        _fileWatcherService.StopWatching(fullPath);
 
         _logger.LogInformation("Client {ConnectionId} stopped watching: {Path}",
             Context.ConnectionId, LogFormatter.ToYellow(fullPath));
@@ -145,20 +169,83 @@ public class FileHub : Hub
     /// <summary>
     /// Create a new directory.
     /// </summary>
-    /// <param name="dirPath"></param>
     public void CreateDirectory(string dirPath)
     {
         _logger.LogInformation("Creating directory: {DirPath}", LogFormatter.ToGreen(dirPath));
         _fileService.CreateDirectory(dirPath);
     }
 
+    public void DeleteDirectory(string dirPath)
+    {
+        _logger.LogInformation("Deleting directory: {DirPath}", LogFormatter.ToGreen(dirPath));
+        _fileService.DeleteDirectory(dirPath);
+    }
+
+    public void MoveDirectory(string sourcePath, string destPath)
+    {
+        _logger.LogInformation("Moving directory from {SourcePath} to {DestPath}",
+            LogFormatter.ToGreen(sourcePath), LogFormatter.ToGreen(destPath));
+        _fileService.MoveDirectory(sourcePath, destPath);
+    }
+
+    public void RenameDirectory(string sourcePath, string destPath)
+    {
+        _logger.LogInformation("Renaming directory from {SourcePath} to {DestPath}",
+            LogFormatter.ToGreen(sourcePath), LogFormatter.ToGreen(destPath));
+        _fileService.MoveDirectory(sourcePath, destPath);
+    }
+
+    public void CopyDirectory(string sourcePath, string destPath)
+    {
+        _logger.LogInformation("Copying directory from {SourcePath} to {DestPath}",
+            LogFormatter.ToGreen(sourcePath), LogFormatter.ToGreen(destPath));
+        _fileService.CopyDirectory(sourcePath, destPath);
+    }
+
+    public void CreateFile(string filePath)
+    {
+        _logger.LogInformation("Creating file: {FilePath}", LogFormatter.ToGreen(filePath));
+        _fileService.CreateFile(filePath);
+    }
+
+    public void DeleteFile(string filePath)
+    {
+        _logger.LogInformation("Deleting file: {FilePath}", LogFormatter.ToGreen(filePath));
+        _fileService.DeleteFile(filePath);
+    }
+
+    public void MoveFile(string sourcePath, string destPath)
+    {
+        _logger.LogInformation("Moving file from {SourcePath} to {DestPath}",
+            LogFormatter.ToGreen(sourcePath), LogFormatter.ToGreen(destPath));
+        _fileService.MoveFile(sourcePath, destPath);
+    }
+
+    public void RenameFile(string sourcePath, string destPath)
+    {
+        _logger.LogInformation("Renaming file from {SourcePath} to {DestPath}",
+            LogFormatter.ToGreen(sourcePath), LogFormatter.ToGreen(destPath));
+        _fileService.MoveFile(sourcePath, destPath);
+    }
+
+    public void CopyFile(string sourcePath, string destPath)
+    {
+        _logger.LogInformation("Copying file from {SourcePath} to {DestPath}",
+            LogFormatter.ToGreen(sourcePath), LogFormatter.ToGreen(destPath));
+        _fileService.CopyFile(sourcePath, destPath);
+    }
+
     /// <summary>
     /// Save file content from a stream.
     /// </summary>
-    public async Task SaveFileAsync(string filePath, ChannelReader<string> stream)
+    /// <param name="filePath">The target file path</param>
+    /// <param name="stream">The content stream to write</param>
+    /// <param name="encoding">The encoding to use when saving (default: utf-8)</param>
+    public async Task SaveFileAsync(string filePath, ChannelReader<string> stream, string encoding = "utf-8")
     {
-        _logger.LogInformation("Saving file: {FilePath}", LogFormatter.ToGreen(filePath));
-        await _fileService.SaveFileAsync(filePath, stream);
+        _logger.LogInformation("Saving file: {FilePath} with encoding: {Encoding}",
+            LogFormatter.ToGreen(filePath), encoding);
+        await _fileService.SaveFileAsync(filePath, stream, encoding);
     }
 
     /// <summary>

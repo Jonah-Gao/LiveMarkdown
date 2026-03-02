@@ -1,6 +1,6 @@
 ﻿/**
  * Enum representing the different types of tokens supported by the Markdown parser.
- * Using const enum for performance optimisation (inlined at compile time).
+ * Using const enum for performance optimization (inlined at compile time).
  */
 const enum TokenType {
     BODY = 'body',

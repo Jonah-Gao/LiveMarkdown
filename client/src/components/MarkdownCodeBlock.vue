@@ -1,20 +1,23 @@
 ﻿<script setup lang="ts">
-import {kernelConnection, executePythonCodeAsync, pythonInputAsync} from "@/services/kernelService.ts";
+import {getKernelConnection, executePythonCodeAsync, pythonInputAsync} from "@/services/pythonService.ts";
+import {ensureServiceConnection} from "@/services/serviceConnection.ts";
 import {onMounted, onUnmounted, ref, nextTick, watch} from "vue";
 import {Terminal} from "@xterm/xterm";
 import {FitAddon} from "@xterm/addon-fit";
 import '@xterm/xterm/css/xterm.css';
-import {theme} from "@/styles/GithubTerminalTheme.ts";
+import terminalTheme from "@/styles/GithubTerminalTheme.json";
 import hljs from 'highlight.js'
 import 'highlight.js/styles/github-dark.css'
 import {v4 as uuidv4} from "uuid";
 import {useWorkspaceStore} from "@/stores/workspace.ts";
+import {useKernelStore} from "@/stores/kernel.ts";
 
 const props = defineProps<{ code: string, lang: string }>();
 const mdTerminal = ref<HTMLDivElement | null>(null);
 const terminal = ref<HTMLDivElement | null>(null); // Renamed to avoid confusion
 const codeEl = ref<HTMLElement | null>(null)
 const workspace = useWorkspaceStore()
+const kernelStore = useKernelStore()
 
 const terminalId: string = uuidv4();
 let xterm: Terminal | null = null;
@@ -22,7 +25,6 @@ let xterm: Terminal | null = null;
 let fitAddon: FitAddon | null = null;
 // Define callback reference for easier disposal later
 const onOutputReceived = (targetId: string, output: string) => {
-    console.log('[SignalR] Received:', output);
     if (terminalId !== targetId) return;
     // 1. Ensure container is visible
     if (mdTerminal.value && mdTerminal.value.style.display !== 'block') {
@@ -54,32 +56,33 @@ const onCodeExecutionCompleted = (targetId: string) => {
 };
 onMounted(async () => {
     // 1. Initialize Terminal UI
-
     initializeTerminal();
-    // 2. Register SignalR listener
-    // Remove old listener with same name first (prevent duplicate printing caused by hot reload or component reuse)
-    // TODO: add function to run code in Run terminal
-    kernelConnection.off('CodeOutput');
-    kernelConnection.on('CodeOutput', onOutputReceived);
 
-    kernelConnection.on('CodeExecutionCompleted', onCodeExecutionCompleted);
-    // 3. Ensure connection is started
-    if (kernelConnection.state !== 'Connected') {
-        try {
-            await kernelConnection.start();
-            console.log('SignalR Connected');
-        } catch (err) {
-            console.error('SignalR Start Failed', err);
-        }
+    // Wait for kernel to be running
+    if (!kernelStore.isRunning) {
+        console.log('Waiting for kernel to start...')
+        return
     }
 
+    // 2. Register SignalR listener
+    const connection = getKernelConnection()
+    await ensureServiceConnection(connection)
+    connection.off('CodeOutput');
+    connection.on('CodeOutput', onOutputReceived);
+    connection.on('CodeExecutionCompleted', onCodeExecutionCompleted);
 });
 onUnmounted(() => {
     // Cleanup
-    kernelConnection.off('CodeOutput', onOutputReceived);
+    if (kernelStore.isRunning) {
+        try {
+            const conn = getKernelConnection()
+            conn.off('CodeOutput', onOutputReceived);
+        } catch (e) {
+            // Ignore if kernel not running
+        }
+    }
     xterm?.dispose();
     xterm = null;
-
 });
 
 watch(
@@ -106,7 +109,7 @@ function initializeTerminal() {
         cols: 20,
         fontSize: 13,
         lineHeight: 1.2,
-        theme: theme,
+        theme: terminalTheme,
         convertEol: true
     });
 
@@ -136,7 +139,6 @@ async function executeCodeBlock() {
 
 function copyCodeBlock() {
     navigator.clipboard.writeText(props.code).then(() => {
-        console.log('Code copied to clipboard')
     }).catch(err => {
         console.error('Failed to copy code: ', err)
     })
@@ -149,9 +151,6 @@ function copyCodeBlock() {
         <div class="md-code-actions">
             <div class="md-icon-btn md-execute-btn" @click="executeCodeBlock">
                 <span class="material-symbols-outlined">play_arrow</span>
-            </div>
-            <div class="md-icon-btn md-execute-terminal-btn">
-                <span class="material-symbols-outlined">fast_forward</span>
             </div>
             <div class="md-icon-btn md-copy-btn" @click="copyCodeBlock">
                 <span class="material-symbols-outlined">content_copy</span>

@@ -1,37 +1,74 @@
 ﻿import * as signalR from '@microsoft/signalr'
-import SIGNALR_CONFIG from '@/config/signalr.json'
+import { useKernelStore } from '@/stores/kernel'
+import { ensureServiceConnection} from "@/services/serviceConnection.ts";
+
+let terminalConnection: signalR.HubConnection | null = null
+let terminalConnectionUrl: string | null = null
 
 /**
- * SignalR connection for terminal operations.
+ * Get or create the SignalR connection for terminal operations.
  */
-export const terminalConnection = new signalR.HubConnectionBuilder()
-    .withUrl(SIGNALR_CONFIG.terminalHub)
-    .withAutomaticReconnect()
-    .build()
+function getConnection(): signalR.HubConnection {
+    const kernelStore = useKernelStore()
+    const baseUrl = kernelStore.baseUrl
 
-/**
- * Ensure the terminal connection is established.
- */
-export async function ensureTerminalConnection(): Promise<void> {
-    if (terminalConnection.state === signalR.HubConnectionState.Disconnected) {
-        await terminalConnection.start()
+    if (!baseUrl) {
+        throw new Error('Kernel not running - no port available')
     }
+
+    const url = `${baseUrl}/terminalHub`
+
+    if (!terminalConnection || terminalConnectionUrl !== url) {
+        if (terminalConnection) {
+            terminalConnection.stop().then(() => {})
+        }
+        terminalConnection = new signalR.HubConnectionBuilder()
+            .withUrl(url)
+            .withAutomaticReconnect()
+            .build()
+        terminalConnectionUrl = url
+    }
+
+    return terminalConnection
 }
 
-export async function initializeTerminal(cwd: string): Promise<void> {
-    await ensureTerminalConnection()
+export { terminalConnection, getConnection as getTerminalConnection }
+
+/**
+ * Initialize a terminal session with a specific session ID.
+ */
+export async function initializeTerminal(terminalId: string, cwd: string): Promise<void> {
+    const connection = getConnection()
+    await ensureServiceConnection(connection)
     try {
-        await terminalConnection.invoke('TerminalInit', cwd)
+        await connection.invoke('TerminalInit', terminalId, cwd)
     } catch (err) {
         console.error('Terminal initialization failed:', err)
     }
 }
 
-export async function terminalInputAsync(data: string): Promise<void> {
-    await ensureTerminalConnection()
+/**
+ * Send input to a terminal session.
+ */
+export async function terminalInputAsync(terminalId: string, data: string): Promise<void> {
+    const connection = getConnection()
+    await ensureServiceConnection(connection)
     try {
-        await terminalConnection.invoke('TerminalInput', data)
+        await connection.invoke('TerminalInput', terminalId, data)
     } catch (err) {
         console.error('Terminal input failed:', err)
+    }
+}
+
+/**
+ * Close a terminal session.
+ */
+export async function closeTerminalSession(terminalId: string): Promise<void> {
+    const connection = getConnection()
+    await ensureServiceConnection(connection)
+    try {
+        await connection.invoke('TerminalDisconnect', terminalId)
+    } catch (err) {
+        console.error('Terminal close session failed:', err)
     }
 }

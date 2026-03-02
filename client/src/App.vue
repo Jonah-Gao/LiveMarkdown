@@ -2,17 +2,22 @@
 import {onMounted, ref} from 'vue'
 import {storeToRefs} from 'pinia'
 import FileExplorer from './components/FileExplorer.vue'
+import SearchPanel from './components/SearchPanel.vue'
 import TabsBar from './components/TabsBar.vue'
 import Editor from './components/Editor.vue'
 import Preview from './components/Preview.vue'
 import Terminal from './components/Terminal.vue'
 import {useWorkspaceStore} from '@/stores/workspace'
+import {useKernelStore} from '@/stores/kernel'
 import NavigationBar from "@/components/NavigationBar.vue"
 
 const workspace = useWorkspaceStore()
+const kernelStore = useKernelStore()
+
 const {
     explorerStyle,
     showExplorer,
+    showSearch,
     showTerminal,
     showCodePane,
     showPreviewPane,
@@ -21,6 +26,8 @@ const {
     hasWorkspace,
     layoutState
 } = storeToRefs(workspace)
+
+const { status: kernelStatus } = storeToRefs(kernelStore)
 
 const sidebarButtons = workspace.sidebarButtons
 const viewModeButtons = workspace.viewModeButtons
@@ -52,16 +59,67 @@ function isBottomButtonActive(index: number): boolean {
 }
 
 onMounted(async () => {
-    // Initialize workspace with last working directory
-    workspace.rootDirectory = await window.cwd.getCwd()
-    await workspace.loadWorkspaceSettings()
+    const startTime = Date.now()
+    let appReadyCalled = false
+
+    const callAppReady = () => {
+        if (appReadyCalled) return
+        appReadyCalled = true
+        const elapsed = Date.now() - startTime
+        const remaining = Math.max(0, 1000 - elapsed)
+        setTimeout(() => window.windowControls.appReady(), remaining)
+    }
+
+    // Timeout fallback - show main window after 10s even if loading fails
+    const timeout = setTimeout(() => {
+        console.warn('[App] Loading timeout, showing main window anyway')
+        callAppReady()
+    }, 10000)
+
+    try {
+        // Promise that resolves when kernel port is ready
+        const portReady = new Promise<void>((resolve) => {
+            window.kernel.onPort((port) => {
+                kernelStore.setPort(port)
+                resolve()
+            })
+        })
+
+        window.kernel.onStatus((status, error) => {
+            kernelStore.setStatus(status as any, error)
+        })
+
+        // Get initial kernel state
+        const initialStatus = await window.kernel.getStatus()
+        kernelStore.setStatus(initialStatus)
+
+        // Check if port already available, otherwise wait for it
+        const initialPort = await window.kernel.getPort()
+        if (initialPort) {
+            kernelStore.setPort(initialPort)
+        } else {
+            await portReady
+        }
+
+        // Initialize workspace with last working directory (after kernel port is ready)
+        workspace.rootDirectory = await window.cwd.getCwd()
+        workspace.displayRootDirectory = await window.cwd.getDisplayCwd()
+        await workspace.loadWorkspaceSettings()
+
+        clearTimeout(timeout)
+        callAppReady()
+    } catch (error) {
+        console.error('[App] Loading error:', error)
+        clearTimeout(timeout)
+        callAppReady()
+    }
 
     // Set up window close handler
     window.windowControls.onBeforeClose(() => {
-        console.log("Window is closing, saving state...");
         workspace.saveDirtyTabs()
         workspace.saveWorkspaceSettings()
         window.cwd.setCwd(workspace.rootDirectory)
+        window.cwd.setDisplayCwd(workspace.displayRootDirectory)
         window.windowControls.canClose()
     })
 })
@@ -100,11 +158,11 @@ onMounted(async () => {
             <div class="workspace-wrapper">
                 <div class="workspace">
                     <template v-if="hasWorkspace">
-                        <FileExplorer
-                            v-show="showExplorer"
-                            :style="explorerStyle"
-                        />
-                        <div v-show="showExplorer" class="vertical-resizer"
+                        <div v-show="showExplorer || showSearch" class="sidebar-panel" :style="explorerStyle">
+                            <FileExplorer v-show="showExplorer"/>
+                            <SearchPanel v-show="showSearch"/>
+                        </div>
+                        <div v-show="showExplorer || showSearch" class="vertical-resizer"
                              @mousedown="workspace.startExplorerResize"></div>
 
                         <div class="editor-container">
@@ -147,9 +205,11 @@ onMounted(async () => {
 
         <div class="status-bar">
             <div class="status-bar-left">
-                <div class="status-item">
-                    <span class="status-indicator"></span>
-                    <span>Ready</span>
+                <div class="status-item" :class="'kernel-' + kernelStatus">
+                    <span v-if="kernelStatus === 'running'" class="status-indicator"></span>
+                    <span v-else-if="kernelStatus === 'starting'" class="status-indicator warning"></span>
+                    <span v-else class="status-indicator error"></span>
+                    <span>{{ kernelStatus === 'running' ? 'Ready' : kernelStatus === 'starting' ? 'Starting' : 'Kernel'}}</span>
                 </div>
                 <div class="status-item">
                     <span class="material-symbols-outlined">description</span>
@@ -161,7 +221,7 @@ onMounted(async () => {
                     <span>{{ workspace.currentLanguage }}</span>
                 </div>
                 <div class="status-item">
-                    <span>UTF-8</span>
+                    <span>{{ workspace.currentEncoding.toUpperCase() }}</span>
                 </div>
             </div>
         </div>

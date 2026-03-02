@@ -1,31 +1,39 @@
 {
   "name": "client",
   "private": true,
-  "version": "0.0.0",
+  "version": "1.0.1",
+  "description": "CS NEA Project",
+  "author": "Jonah Gao",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "vue-tsc && vite build && electron-builder",
     "preview": "vite preview",
-    "test": "vitest"
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "start": "electron ."
   },
   "dependencies": {
     "@microsoft/signalr": "^10.0.0",
     "@xterm/addon-fit": "^0.10.0",
     "@xterm/xterm": "^5.5.0",
     "electron-store": "^11.0.2",
+    "electron-window-state": "^5.0.3",
     "highlight.js": "^11.11.1",
     "material-symbols": "^0.40.0",
-    "monaco-editor-vue3": "^1.0.4",
+    "monaco-editor": "^0.55.1",
     "pinia": "^3.0.4",
     "uuid": "^13.0.0",
+    "vite-plugin-monaco-editor": "^1.1.0",
     "vue": "^3.4.21"
   },
   "devDependencies": {
+    "@types/jsdom": "^27.0.0",
     "@types/markdown-it": "^14.1.2",
     "@vitejs/plugin-vue": "^5.0.4",
     "electron": "^30.0.1",
     "electron-builder": "^24.13.3",
+    "jsdom": "^28.0.0",
     "typescript": "^5.2.2",
     "vite": "^5.1.6",
     "vite-plugin-electron": "^0.28.6",

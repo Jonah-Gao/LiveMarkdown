@@ -6,6 +6,7 @@ using System.Text.Json.Serialization;
 using System.Threading.Channels;
 using JetBrains.Annotations;
 using kernel.Utils;
+using UtfUnknown;
 
 namespace kernel.Services;
 
@@ -13,9 +14,6 @@ namespace kernel.Services;
 /// Service for file system operations including reading directories,
 /// streaming file content, and managing workspace settings.
 /// </summary>
-/// <remarks>
-/// TODO: Directory watching to auto-refresh file tree and open tabs on changes
-/// </remarks>
 public class FileService(ILogger<FileService> logger)
 {
     /// <summary>
@@ -26,8 +24,8 @@ public class FileService(ILogger<FileService> logger)
         [property: UsedImplicitly] string Name,
         [property: UsedImplicitly] string Path,
         [property: UsedImplicitly] string Extension,
-        [property: UsedImplicitly] bool IsDirectory,
         [property: UsedImplicitly] string ParentPath,
+        [property: UsedImplicitly] bool IsDirectory,
         [property: UsedImplicitly] bool Expanded = false
     );
 
@@ -41,7 +39,8 @@ public class FileService(ILogger<FileService> logger)
         [property: UsedImplicitly] string Path = "",
         [property: UsedImplicitly] string Content = "",
         [property: UsedImplicitly] bool IsMetadata = false,
-        [property: UsedImplicitly] bool IsError = false
+        [property: UsedImplicitly] bool IsError = false,
+        [property: UsedImplicitly] string Encoding = "utf-8"
     );
 
     /// <summary>
@@ -50,9 +49,9 @@ public class FileService(ILogger<FileService> logger)
     [JsonConverter(typeof(JsonStringEnumConverter))]
     public enum ViewMode
     {
-        [EnumMember(Value = "code")] Code,
-        [EnumMember(Value = "split")] Split,
-        [EnumMember(Value = "preview")] Preview,
+        [UsedImplicitly][EnumMember(Value = "code")] Code,
+        [UsedImplicitly][EnumMember(Value = "split")] Split,
+        [UsedImplicitly][EnumMember(Value = "preview")] Preview
     }
 
     /// <summary>
@@ -61,10 +60,9 @@ public class FileService(ILogger<FileService> logger)
     [JsonConverter(typeof(JsonStringEnumConverter))]
     public enum SidebarPanel
     {
-        [EnumMember(Value = "explorer")] Explorer,
-        [EnumMember(Value = "search")] Search,
-        [EnumMember(Value = "run")] Run,
-        [EnumMember(Value = "terminal")] Terminal,
+        [UsedImplicitly][EnumMember(Value = "explorer")] Explorer,
+        [UsedImplicitly][EnumMember(Value = "search")] Search,
+        [UsedImplicitly][EnumMember(Value = "terminal")] Terminal
     }
 
     /// <summary>
@@ -77,8 +75,10 @@ public class FileService(ILogger<FileService> logger)
         double EditorPreviewRatio,
         ViewMode PreferredViewMode,
         string[] OpenedFiles,
+        string[] ExpandedDirectories,
         string ActiveFile = "",
         bool ExplorerVisible = true,
+        bool SearchVisible = false,
         bool TerminalVisible = false,
         SidebarPanel? ActiveTopPanel = SidebarPanel.Explorer,
         SidebarPanel? ActiveBottomPanel = null
@@ -99,38 +99,72 @@ public class FileService(ILogger<FileService> logger)
 
     /// <summary>
     /// Stream file content as chunks for efficient loading of large files.
-    /// First yields metadata, then yields content chunks.
+    /// First yields metadata (including detected encoding), then yields content chunks.
+    /// Uses Mozilla Universal Charset Detector to detect file encoding.
     /// </summary>
     public async IAsyncEnumerable<TabChunk> StreamTabAsync(string filePath,
         [EnumeratorCancellation] CancellationToken token = default)
     {
         var tabId = Guid.NewGuid().ToString();
 
+        // Detect file encoding using Mozilla Universal Charset Detector
+        var detectedEncoding = "utf-8";
+        try
+        {
+            var result = await CharsetDetector.DetectFromFileAsync(filePath, token);
+            if (result.Detected?.EncodingName != null)
+            {
+                // Treat ASCII as UTF-8 for frontend compatibility
+                detectedEncoding = result.Detected.EncodingName.Equals("ASCII", StringComparison.OrdinalIgnoreCase)
+                    ? "utf-8"
+                    : result.Detected.EncodingName;
+                logger.LogDebug("Detected encoding for {FilePath}: {Encoding}", 
+                    LogFormatter.ToGreen(filePath), detectedEncoding);
+            }
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Failed to detect encoding for {FilePath}, defaulting to UTF-8", filePath);
+        }
+
         // First return tab metadata so frontend can create the tab immediately
         yield return new TabChunk(
             Id: tabId,
             Name: Path.GetFileName(filePath),
             Path: filePath,
-            IsMetadata: true
+            IsMetadata: true,
+            Encoding: detectedEncoding
         );
 
-        await foreach (var chunk in StreamFileContentAsync(tabId, filePath, token))
+        await foreach (var chunk in StreamFileContentAsync(tabId, filePath, detectedEncoding, token))
         {
             yield return chunk;
         }
     }
 
     /// <summary>
-    /// Stream file content in chunks.
+    /// Stream file content in chunks using the specified encoding.
     /// </summary>
-    private async IAsyncEnumerable<TabChunk> StreamFileContentAsync(string tabId, string filePath,
-        [EnumeratorCancellation] CancellationToken token = default)
+    private async IAsyncEnumerable<TabChunk> StreamFileContentAsync(string tabId, string filePath, 
+        string encodingName, [EnumeratorCancellation] CancellationToken token = default)
     {
         TabChunk? errorTabChunk = null;
+        Encoding encoding;
+        
+        try
+        {
+            encoding = GetEncodingByName(encodingName);
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Failed to get encoding {EncodingName}, falling back to UTF-8", encodingName);
+            encoding = Encoding.UTF8;
+        }
+        
         StreamReader? reader = null;
         try
         {
-            reader = File.OpenText(filePath);
+            reader = new StreamReader(filePath, encoding, detectEncodingFromByteOrderMarks: true);
         }
         catch (UnauthorizedAccessException ex)
         {
@@ -153,9 +187,8 @@ public class FileService(ILogger<FileService> logger)
         {
             const int chunkSize = 65536; // 64KiB per chunk for efficient streaming
             var buffer = new char[chunkSize];
-            using var stream = File.OpenText(filePath);
             int charsRead;
-            while ((charsRead = await stream.ReadAsync(buffer, 0, buffer.Length)) > 0)
+            while ((charsRead = await reader!.ReadAsync(buffer, 0, buffer.Length)) > 0)
             {
                 token.ThrowIfCancellationRequested();
                 yield return new TabChunk(
@@ -164,6 +197,24 @@ public class FileService(ILogger<FileService> logger)
                 );
             }
         }
+    }
+    
+    /// <summary>
+    /// Get the Encoding object by name, with fallback to UTF-8.
+    /// </summary>
+    private static Encoding GetEncodingByName(string encodingName)
+    {
+        // Common encoding name mappings
+        return encodingName.ToLowerInvariant() switch
+        {
+            "utf-8" or "utf8" => Encoding.UTF8,
+            "utf-16le" or "utf-16" => Encoding.Unicode,
+            "utf-16be" => Encoding.BigEndianUnicode,
+            "utf-32" or "utf-32le" => Encoding.UTF32,
+            "ascii" => Encoding.UTF8,
+            "iso-8859-1" or "latin1" => Encoding.Latin1,
+            _ => Encoding.GetEncoding(encodingName)
+        };
     }
 
     /// <summary>
@@ -284,11 +335,7 @@ public class FileService(ILogger<FileService> logger)
         }
     }
 
-    /// <summary>
-    /// Save file content from a stream to disk.
-    /// Uses atomic write with temporary file for data safety.
-    /// </summary>
-    public async Task SaveFileAsync(string filePath, ChannelReader<string> stream, CancellationToken ct = default)
+    public void CreateFile(string filePath)
     {
         if (string.IsNullOrWhiteSpace(filePath))
         {
@@ -296,7 +343,250 @@ public class FileService(ILogger<FileService> logger)
             return;
         }
 
-        // Normalise and validate path
+        // Normalize and validate path
+        var fullPath = Path.GetFullPath(filePath);
+        try
+        {
+            using var fs = File.Create(fullPath);
+            logger.LogInformation("File created: {FilePath}", LogFormatter.ToGreen(fullPath));
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Error creating file: {FilePath}", LogFormatter.ToBrightRed(fullPath));
+        }
+    }
+
+    public void DeleteFile(string filePath)
+    {
+        if (string.IsNullOrWhiteSpace(filePath))
+        {
+            logger.LogError("Invalid file path: {FilePath}", LogFormatter.ToBrightRed(filePath));
+            return;
+        }
+
+        // Normalize and validate path
+        var fullPath = Path.GetFullPath(filePath);
+        try
+        {
+            if (File.Exists(fullPath))
+            {
+                File.Delete(fullPath);
+                logger.LogInformation("File deleted: {FilePath}", LogFormatter.ToGreen(fullPath));
+            }
+            else
+            {
+                logger.LogWarning("File does not exist: {FilePath}", LogFormatter.ToBrightRed(fullPath));
+            }
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Error deleting file: {FilePath}", LogFormatter.ToBrightRed(fullPath));
+        }
+    }
+
+    public void DeleteDirectory(string dirPath)
+    {
+        if (string.IsNullOrWhiteSpace(dirPath))
+        {
+            logger.LogError("Invalid directory path: {DirPath}", LogFormatter.ToBrightRed(dirPath));
+            return;
+        }
+
+        // Normalize and validate path
+        var fullPath = Path.GetFullPath(dirPath);
+        try
+        {
+            if (Directory.Exists(fullPath))
+            {
+                Directory.Delete(fullPath, recursive: true);
+                logger.LogInformation("Directory deleted: {DirPath}", LogFormatter.ToGreen(fullPath));
+            }
+            else
+            {
+                logger.LogWarning("Directory does not exist: {DirPath}", LogFormatter.ToBrightRed(fullPath));
+            }
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Error deleting directory: {DirPath}", LogFormatter.ToBrightRed(fullPath));
+        }
+    }
+
+    public void MoveFile(string oldFilePath, string newFilePath)
+    {
+        if (string.IsNullOrWhiteSpace(oldFilePath) || string.IsNullOrWhiteSpace(newFilePath))
+        {
+            logger.LogError("Invalid file paths: {OldFilePath}, {NewFilePath}",
+                LogFormatter.ToBrightRed(oldFilePath),
+                LogFormatter.ToBrightRed(newFilePath));
+            return;
+        }
+
+        // Normalize and validate paths
+        var fullOldPath = Path.GetFullPath(oldFilePath);
+        var fullNewPath = Path.GetFullPath(newFilePath);
+        try
+        {
+            if (File.Exists(fullOldPath))
+            {
+                File.Move(fullOldPath, fullNewPath);
+                logger.LogInformation("File renamed from {OldFilePath} to {NewFilePath}",
+                    LogFormatter.ToGreen(fullOldPath),
+                    LogFormatter.ToGreen(fullNewPath));
+            }
+            else
+            {
+                logger.LogWarning("Source file does not exist: {OldFilePath}", LogFormatter.ToBrightRed(fullOldPath));
+            }
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Error renaming file from {OldFilePath} to {NewFilePath}",
+                LogFormatter.ToBrightRed(fullOldPath),
+                LogFormatter.ToBrightRed(fullNewPath));
+        }
+    }
+    
+    public void MoveDirectory(string oldFilePath, string newFilePath)
+    {
+        if (string.IsNullOrWhiteSpace(oldFilePath) || string.IsNullOrWhiteSpace(newFilePath))
+        {
+            logger.LogError("Invalid directory paths: {OldDirPath}, {NewDirPath}",
+                LogFormatter.ToBrightRed(oldFilePath),
+                LogFormatter.ToBrightRed(newFilePath));
+            return;
+        }
+
+        // Normalize and validate paths
+        var fullOldPath = Path.GetFullPath(oldFilePath);
+        var fullNewPath = Path.GetFullPath(newFilePath);
+        try
+        {
+            if (Directory.Exists(fullOldPath))
+            {
+                Directory.Move(fullOldPath, fullNewPath);
+                logger.LogInformation("Directory renamed from {OldDirPath} to {NewDirPath}",
+                    LogFormatter.ToGreen(fullOldPath),
+                    LogFormatter.ToGreen(fullNewPath));
+            }
+            else
+            {
+                logger.LogWarning("Source directory does not exist: {OldDirPath}", LogFormatter.ToBrightRed(fullOldPath));
+            }
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Error renaming directory from {OldDirPath} to {NewDirPath}",
+                LogFormatter.ToBrightRed(fullOldPath),
+                LogFormatter.ToBrightRed(fullNewPath));
+        }
+    }
+
+    public void CopyFile(string oldFilePath, string newFilePath)
+    {
+        if (string.IsNullOrWhiteSpace(oldFilePath) || string.IsNullOrWhiteSpace(newFilePath))
+        {
+            logger.LogError("Invalid file paths: {OldFilePath}, {NewFilePath}",
+                LogFormatter.ToBrightRed(oldFilePath),
+                LogFormatter.ToBrightRed(newFilePath));
+            return;
+        }
+
+        // Normalize and validate paths
+        var fullOldPath = Path.GetFullPath(oldFilePath);
+        var fullNewPath = Path.GetFullPath(newFilePath);
+        try
+        {
+            if (File.Exists(fullOldPath))
+            {
+                File.Copy(fullOldPath, fullNewPath, overwrite: false);
+                logger.LogInformation("File copied from {OldFilePath} to {NewFilePath}",
+                    LogFormatter.ToGreen(fullOldPath),
+                    LogFormatter.ToGreen(fullNewPath));
+            }
+            else
+            {
+                logger.LogWarning("Source file does not exist: {OldFilePath}", LogFormatter.ToBrightRed(fullOldPath));
+            }
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Error copying file from {OldFilePath} to {NewFilePath}",
+                LogFormatter.ToBrightRed(fullOldPath),
+                LogFormatter.ToBrightRed(fullNewPath));
+        }
+    }
+    
+    public void CopyDirectory(string oldDirPath, string newDirPath)
+    {
+        if (string.IsNullOrWhiteSpace(oldDirPath) || string.IsNullOrWhiteSpace(newDirPath))
+        {
+            logger.LogError("Invalid directory paths: {OldDirPath}, {NewDirPath}",
+                LogFormatter.ToBrightRed(oldDirPath),
+                LogFormatter.ToBrightRed(newDirPath));
+            return;
+        }
+
+        // Normalize and validate paths
+        var fullOldPath = Path.GetFullPath(oldDirPath);
+        var fullNewPath = Path.GetFullPath(newDirPath);
+        try
+        {
+            if (Directory.Exists(fullOldPath))
+            {
+                CopyDirectoryRecursive(fullOldPath, fullNewPath);
+                logger.LogInformation("Directory copied from {OldDirPath} to {NewDirPath}",
+                    LogFormatter.ToGreen(fullOldPath),
+                    LogFormatter.ToGreen(fullNewPath));
+            }
+            else
+            {
+                logger.LogWarning("Source directory does not exist: {OldDirPath}", LogFormatter.ToBrightRed(fullOldPath));
+            }
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Error copying directory from {OldDirPath} to {NewDirPath}",
+                LogFormatter.ToBrightRed(fullOldPath),
+                LogFormatter.ToBrightRed(fullNewPath));
+        }
+    }
+    
+    private static void CopyDirectoryRecursive(string sourceDir, string destDir)
+    {
+        Directory.CreateDirectory(destDir);
+
+        foreach (var filePath in Directory.GetFiles(sourceDir))
+        {
+            var destFilePath = Path.Combine(destDir, Path.GetFileName(filePath));
+            File.Copy(filePath, destFilePath, overwrite: false);
+        }
+
+        foreach (var directoryPath in Directory.GetDirectories(sourceDir))
+        {
+            var destDirectoryPath = Path.Combine(destDir, Path.GetFileName(directoryPath));
+            CopyDirectoryRecursive(directoryPath, destDirectoryPath);
+        }
+    }
+    
+    /// <summary>
+    /// Save file content from a stream to disk.
+    /// Uses atomic write with temporary file for data safety.
+    /// </summary>
+    /// <param name="filePath">The target file path</param>
+    /// <param name="stream">The content stream to write</param>
+    /// <param name="encodingName">The encoding to use when saving (default: utf-8)</param>
+    /// <param name="ct">Cancellation token</param>
+    public async Task SaveFileAsync(string filePath, ChannelReader<string> stream, 
+        string encodingName = "utf-8", CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(filePath))
+        {
+            logger.LogError("Invalid file path: {FilePath}", LogFormatter.ToBrightRed(filePath));
+            return;
+        }
+
+        // Normalize and validate path
         var fullPath = Path.GetFullPath(filePath);
         var dir = Path.GetDirectoryName(fullPath);
         if (string.IsNullOrEmpty(dir))
@@ -308,10 +598,24 @@ public class FileService(ILogger<FileService> logger)
         Directory.CreateDirectory(dir);
 
         var tempPath = Path.Combine(dir, $"{Path.GetFileName(fullPath)}.{Guid.NewGuid():N}.tmp");
+        
+        // Get the encoding to use for saving
+        Encoding encoding;
+        try
+        {
+            encoding = GetEncodingByName(encodingName);
+            logger.LogDebug("Saving file {FilePath} with encoding: {Encoding}", 
+                LogFormatter.ToGreen(fullPath), encodingName);
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Failed to get encoding {EncodingName}, falling back to UTF-8", encodingName);
+            encoding = Encoding.UTF8;
+        }
 
         try
         {
-            await using (var writer = new StreamWriter(tempPath, false, Encoding.UTF8, 65536))
+            await using (var writer = new StreamWriter(tempPath, false, encoding, 65536))
             {
                 await foreach (var chunk in stream.ReadAllAsync(ct))
                 {
@@ -350,7 +654,7 @@ public class FileService(ILogger<FileService> logger)
             return;
         }
 
-        // Normalise and validate path
+        // Normalize and validate path
         var fullPath = Path.GetFullPath(cwd);
         var settingsDir = Path.Combine(fullPath, ".LiveMarkdown");
         var settingsFile = Path.Combine(settingsDir, "settings.json");
@@ -404,7 +708,7 @@ public class FileService(ILogger<FileService> logger)
             return null;
         }
 
-        // Normalise and validate path
+        // Normalize and validate path
         var fullPath = Path.GetFullPath(cwd);
         var settingsFile = Path.Join(fullPath, ".LiveMarkdown", "settings.json");
         if (!File.Exists(settingsFile))

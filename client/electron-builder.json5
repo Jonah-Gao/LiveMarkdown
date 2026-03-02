@@ -1,9 +1,10 @@
 // @see - https://www.electron.build/configuration/configuration
+// Windows-only application
 {
   "$schema": "https://raw.githubusercontent.com/electron-userland/electron-builder/master/packages/app-builder-lib/scheme.json",
-  "appId": "YourAppID",
+  "appId": "com.csnea.client",
   "asar": true,
-  "productName": "YourAppName",
+  "productName": "LiveMarkdown",
   "directories": {
     "output": "release/${version}"
   },
@@ -11,12 +12,13 @@
     "dist",
     "dist-electron"
   ],
-  "mac": {
-    "target": [
-      "dmg"
-    ],
-    "artifactName": "${productName}-Mac-${version}-Installer.${ext}"
-  },
+  "extraResources": [
+    {
+      "from": "kernel",
+      "to": ".kernel",
+      "filter": ["**/*"]
+    }
+  ],
   "win": {
     "target": [
       {
@@ -26,18 +28,13 @@
         ]
       }
     ],
-    "artifactName": "${productName}-Windows-${version}-Setup.${ext}"
+    "artifactName": "${productName}-Windows-${version}-Setup.${ext}",
+    "icon": "public/favicon.ico"
   },
   "nsis": {
     "oneClick": false,
     "perMachine": false,
     "allowToChangeInstallationDirectory": true,
     "deleteAppDataOnUninstall": false
-  },
-  "linux": {
-    "target": [
-      "AppImage"
-    ],
-    "artifactName": "${productName}-Linux-${version}.${ext}"
   }
 }

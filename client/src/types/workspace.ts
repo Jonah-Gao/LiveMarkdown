@@ -3,13 +3,14 @@
  * Contains the essential file metadata and tree structure pointers.
  */
 export interface FileNode {
-    name: string
-    path: string
+    name: string              // Display name with original case
+    path: string              // Lowercase normalized path for storage/comparison
+    displayPath: string       // Original case path for display in UI
     parentPath: string | null
     extension: string
     isDirectory: boolean
-    children: string[]      // Paths to child nodes
-    expanded: boolean       // UI state for directory expansion
+    children: string[]        // Paths to child nodes
+    expanded: boolean         // UI state for directory expansion
 }
 
 /**
@@ -19,6 +20,7 @@ export interface FileNode {
 export interface UIFileNode {
     name: string
     path: string
+    displayPath: string       // Original case path for display
     extension: string
     isDirectory: boolean
     children: UIFileNode[]
@@ -32,8 +34,11 @@ export interface Tab {
     id: string
     name: string
     path: string
+    displayPath: string
     content: string
     isDirty: boolean
+    encoding: string          // Detected file encoding (e.g., "utf-8", "utf-16le")
+    language: string          // Monaco editor language identifier
 }
 
 /**
@@ -47,6 +52,7 @@ export interface TabChunk {
     content: string
     isMetadata: boolean
     isError: boolean
+    encoding: string          // Detected file encoding
 }
 
 /**
@@ -63,7 +69,7 @@ export type SidebarPanel = 'explorer' | 'search' | 'run' | 'terminal' | null
  * Layout state persisted to workspace settings.
  * Contains both UI dimensions and panel visibility state.
  */
-export interface PanelLayout {
+export interface WorkspaceSettings {
     // Panel dimensions
     explorerWidth: number
     terminalHeight: number
@@ -74,11 +80,18 @@ export interface PanelLayout {
 
     // Panel visibility state
     explorerVisible: boolean
+    searchVisible: boolean
     terminalVisible: boolean
     activeTopPanel: SidebarPanel
     activeBottomPanel: SidebarPanel
 
     // Open files
     openedFiles: string[]
+    expandedDirectories: Set<string>
     activeFile: string
+}
+
+export interface WorkspaceSettingsDTO
+    extends Omit<WorkspaceSettings, 'expandedDirectories'> {
+    expandedDirectories: string[]
 }

@@ -5,10 +5,13 @@
  * Supports both development and production environments.
  */
 
-import { app, BrowserWindow, Menu, ipcMain } from 'electron'
-import { fileURLToPath } from 'node:url'
+import {app, BrowserWindow, Menu, ipcMain, shell} from 'electron'
+import {fileURLToPath} from 'node:url'
+import {spawn, ChildProcess} from 'child_process';
 import path from 'node:path'
 import Store from 'electron-store'
+import windowStateKeeper from 'electron-window-state'
+import {createSplashWindow, closeSplashWindow} from './splash'
 
 // =============================================================================
 // Environment & Path Configuration
@@ -46,12 +49,14 @@ process.env.VITE_PUBLIC = PUBLIC_PATH
 
 interface StoreSchema {
     lastCwd?: string
+    lastDisplayCwd?: string
 }
 
 const store = new Store<StoreSchema>({
     name: 'config',
     defaults: {
-        lastCwd: undefined
+        lastCwd: undefined,
+        lastDisplayCwd: undefined
     }
 })
 
@@ -60,8 +65,110 @@ const store = new Store<StoreSchema>({
 // =============================================================================
 
 let mainWindow: BrowserWindow | null = null
+let mainWindowState: ReturnType<typeof windowStateKeeper> | null = null
+let shouldMaximize = false
 let pendingClose = false
 let allowClose = false
+let kernelProcess: ChildProcess | null = null
+let kernelPort: number | null = null
+
+// =============================================================================
+// Kernel Management
+// =============================================================================
+
+/**
+ * Start the kernel process and monitor its lifecycle.
+ */
+function startKernel(): void {
+    if (kernelProcess) {
+        console.log('[Kernel] Already running')
+        return
+    }
+
+    mainWindow?.webContents.send('kernel:status', 'starting')
+
+    // In production, kernel is in resources/.kernel folder
+    // In development, it's in the project's kernel folder
+    const kernelDir = isDev
+        ? path.join(APP_ROOT, 'kernel')
+        : path.join(process.resourcesPath, '.kernel')
+    const kernelPath = path.join(kernelDir, 'kernel.exe')
+
+    console.log('[Kernel] Starting from:', kernelPath)
+
+    kernelProcess = spawn(kernelPath, [], {stdio: 'pipe', cwd: kernelDir})
+
+    const onData = (chunk: Buffer) => {
+        const msg = chunk.toString()
+        console.log('[Kernel stdout]', msg)
+        const portMatch = msg.match(/SIGNALR_PORT=(\d+)/)
+        if (portMatch) {
+            kernelPort = parseInt(portMatch[1], 10)
+            mainWindow?.webContents.send('kernel:port', kernelPort)
+            mainWindow?.webContents.send('kernel:status', 'running')
+            kernelProcess!.stdout?.off('data', onData)
+        }
+
+    }
+
+    kernelProcess.stdout?.on('data', onData)
+
+    kernelProcess.stderr?.on('data', (chunk) => {
+        console.error('[Kernel stderr]', chunk.toString())
+    })
+
+    kernelProcess.on('error', (err) => {
+        console.error('[Kernel] Process error:', err)
+        mainWindow?.webContents.send('kernel:status', 'error', err.message)
+        kernelProcess = null
+        kernelPort = null
+    })
+
+    kernelProcess.on('exit', (code, signal) => {
+        console.log(`[Kernel] Exited with code ${code}, signal ${signal}`)
+        const wasRunning = kernelPort !== null
+        kernelProcess = null
+        kernelPort = null
+        mainWindow?.webContents.send('kernel:status', 'stopped')
+
+        // Auto-restart if it was running (unexpected exit)
+        if (wasRunning && mainWindow && !mainWindow.isDestroyed()) {
+            console.log('[Kernel] Unexpected exit, restarting...')
+            setTimeout(() => startKernel(), 1000)
+        }
+    })
+}
+
+/**
+ * Stop the kernel process.
+ */
+function stopKernel(): void {
+    if (kernelProcess) {
+        kernelProcess.kill()
+        kernelProcess = null
+        kernelPort = null
+    }
+}
+
+// IPC handlers for kernel management
+ipcMain.on('kernel:start', () => {
+    startKernel()
+})
+
+ipcMain.on('kernel:stop', () => {
+    stopKernel()
+})
+
+ipcMain.handle('kernel:get-port', () => {
+    return kernelPort
+})
+
+ipcMain.handle('kernel:get-status', () => {
+    if (kernelProcess) {
+        return kernelPort ? 'running' : 'starting'
+    }
+    return 'stopped'
+})
 
 // =============================================================================
 // Window Management
@@ -76,14 +183,25 @@ async function createMainWindow(): Promise<void> {
     pendingClose = false
     allowClose = false
 
+    // Restore window state
+    mainWindowState = windowStateKeeper({
+        defaultWidth: 1200,
+        defaultHeight: 800,
+    })
+    shouldMaximize = mainWindowState.isMaximized
+
     mainWindow = new BrowserWindow({
-        width: 1200,
-        height: 800,
+        x: mainWindowState.x,
+        y: mainWindowState.y,
+        width: mainWindowState.width,
+        height: mainWindowState.height,
         minWidth: 800,
         minHeight: 600,
+        title: 'LiveMarkdown',
         frame: false,
-        icon: path.join(PUBLIC_PATH, 'electron-vite.svg'),
-        show: false, // Don't show until ready
+        icon: path.join(PUBLIC_PATH, 'favicon.ico'),
+        show: false, // Don't show until app:ready
+        backgroundColor: '#0d0d0d', // Prevent white flash
         webPreferences: {
             preload: path.join(__dirname, 'preload.mjs'),
             contextIsolation: true,
@@ -92,11 +210,10 @@ async function createMainWindow(): Promise<void> {
         },
     })
 
-    // Show window when ready to prevent visual flash
-    mainWindow.once('ready-to-show', () => {
-        mainWindow?.show()
-        mainWindow?.maximize()
-    })
+    // Track window state changes (without auto-restoring maximize)
+    mainWindow.on('resize', () => mainWindowState?.saveState(mainWindow!))
+    mainWindow.on('move', () => mainWindowState?.saveState(mainWindow!))
+    mainWindow.on('close', () => mainWindowState?.saveState(mainWindow!))
 
     // Send timestamp to renderer when loaded
     mainWindow.webContents.on('did-finish-load', () => {
@@ -107,10 +224,12 @@ async function createMainWindow(): Promise<void> {
     // Handle window maximize/unmaximize events
     mainWindow.on('maximize', () => {
         mainWindow?.webContents.send('win:maximized', true)
+        mainWindowState?.saveState(mainWindow!)
     })
 
     mainWindow.on('unmaximize', () => {
         mainWindow?.webContents.send('win:maximized', false)
+        mainWindowState?.saveState(mainWindow!)
     })
 
     // Handle graceful close with save confirmation
@@ -130,7 +249,7 @@ async function createMainWindow(): Promise<void> {
     if (isDev) {
         await mainWindow.loadURL(VITE_DEV_SERVER_URL!)
         // Open DevTools in development
-        mainWindow.webContents.openDevTools({ mode: 'detach' })
+        mainWindow.webContents.openDevTools({mode: 'detach'})
     } else {
         await mainWindow.loadFile(path.join(RENDERER_DIST, 'index.html'))
     }
@@ -168,6 +287,12 @@ ipcMain.on('win:can-close', () => {
     mainWindow.close()
 })
 
+// Open external links in the system default browser.
+ipcMain.on('open-external-url', async (_event, url) => {
+    if (!/^https?:\/\//i.test(url)) return
+    await shell.openExternal(url)
+})
+
 // =============================================================================
 // IPC Handlers - Workspace
 // =============================================================================
@@ -182,29 +307,41 @@ ipcMain.on('cwd:set', (_, cwd: string) => {
     store.set('lastCwd', cwd)
 })
 
+ipcMain.handle('cwd:get-display', () => {
+    return store.get('lastDisplayCwd')
+})
+
+ipcMain.on('cwd:set-display', (_, cwd: string) => {
+    store.set('lastDisplayCwd', cwd)
+})
+
+// =============================================================================
+// IPC Handlers - Splash
+// =============================================================================
+
+/** Close splash and show main window when app is ready */
+ipcMain.on('app:ready', () => {
+    closeSplashWindow()
+    if (mainWindow) {
+        mainWindow.show()
+        if (shouldMaximize) {
+            mainWindow.maximize()
+        }
+    }
+})
+
 // =============================================================================
 // Application Lifecycle
 // =============================================================================
 
 /**
- * Quit when all windows are closed (except on macOS).
- * On macOS, apps typically stay active until explicitly quit with Cmd+Q.
+ * Quit when all windows are closed.
+ * Windows-only application - always quit when window is closed.
  */
 app.on('window-all-closed', () => {
-    if (process.platform !== 'darwin') {
-        app.quit()
-        mainWindow = null
-    }
-})
-
-/**
- * Re-create window when dock icon is clicked (macOS).
- * This is the standard macOS behavior for apps without open windows.
- */
-app.on('activate', async () => {
-    if (BrowserWindow.getAllWindows().length === 0) {
-        await createMainWindow()
-    }
+    stopKernel()
+    app.quit()
+    mainWindow = null
 })
 
 /**
@@ -216,6 +353,12 @@ app.whenReady().then(async () => {
         Menu.setApplicationMenu(null)
     }
 
+    // Show splash first
+    createSplashWindow(__dirname, RENDERER_DIST, VITE_DEV_SERVER_URL)
+
+    // Start kernel early
+    startKernel()
+
     await createMainWindow()
 
     // Log startup info in development
@@ -226,7 +369,7 @@ app.whenReady().then(async () => {
 })
 
 /**
- * Handle uncaught exceptions gracefully
+ * Handle uncaught exceptions
  */
 process.on('uncaughtException', (error) => {
     console.error('[Electron] Uncaught exception:', error)

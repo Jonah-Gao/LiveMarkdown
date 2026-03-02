@@ -9,9 +9,11 @@ namespace kernel.Services;
 public class FileWatcherService(ILogger<FileWatcherService> logger) : IDisposable
 {
     private readonly ConcurrentDictionary<string, FileSystemWatcher> _watchers = new();
+    private readonly ConcurrentDictionary<string, int> _watcherRefCounts = new();
     private readonly ConcurrentDictionary<string, CancellationTokenSource> _directoryDebounceTokens = new();
+    private readonly Lock _watcherLock = new();
     private const int DirectoryDebounceMs = 200;
-    private bool _disposed;
+    private volatile bool _disposed;
 
     /// <summary>
     /// Event raised when a directory is marked dirty (debounced). Only the dirty directory path is provided.
@@ -39,42 +41,55 @@ public class FileWatcherService(ILogger<FileWatcherService> logger) : IDisposabl
             return false;
         }
 
-        if (_watchers.ContainsKey(fullPath))
+        lock (_watcherLock)
         {
-            logger.LogDebug("Already watching directory: {Path}", fullPath);
-            return true;
-        }
-
-        try
-        {
-            var watcher = new FileSystemWatcher(fullPath)
+            // Keep watcher creation/removal and ref-count updates in the same critical section
+            // to prevent races that could leak watchers or drive ref counts negative.
+            if (_disposed)
             {
-                NotifyFilter = NotifyFilters.FileName
-                               | NotifyFilters.DirectoryName
-                               | NotifyFilters.CreationTime,
-                IncludeSubdirectories = true,
-                EnableRaisingEvents = false
-            };
+                logger.LogWarning("Attempted to start watching after disposal: {Path}", fullPath);
+                return false;
+            }
 
-            watcher.Created += OnCreated;
-            watcher.Deleted += OnDeleted;
-            watcher.Renamed += OnRenamed;
-            watcher.Error += OnError;
-
-            if (_watchers.TryAdd(fullPath, watcher))
+            if (_watchers.ContainsKey(fullPath))
             {
-                watcher.EnableRaisingEvents = true;
-                logger.LogInformation("Started watching directory: {Path}", fullPath);
+                _watcherRefCounts[fullPath] = _watcherRefCounts.TryGetValue(fullPath, out var count) ? count + 1 : 1;
+                logger.LogDebug("Already watching directory: {Path} (ref count incremented)", fullPath);
                 return true;
             }
 
-            watcher.Dispose();
-            return false;
-        }
-        catch (Exception ex)
-        {
-            logger.LogError(ex, "Failed to start watching directory: {Path}", fullPath);
-            return false;
+            try
+            {
+                var watcher = new FileSystemWatcher(fullPath)
+                {
+                    NotifyFilter = NotifyFilters.FileName
+                                   | NotifyFilters.DirectoryName
+                                   | NotifyFilters.CreationTime,
+                    IncludeSubdirectories = true,
+                    EnableRaisingEvents = false
+                };
+
+                watcher.Created += OnCreated;
+                watcher.Deleted += OnDeleted;
+                watcher.Renamed += OnRenamed;
+                watcher.Error += OnError;
+
+                if (_watchers.TryAdd(fullPath, watcher))
+                {
+                    _watcherRefCounts[fullPath] = 1;
+                    watcher.EnableRaisingEvents = true;
+                    logger.LogInformation("Started watching directory: {Path}", fullPath);
+                    return true;
+                }
+
+                watcher.Dispose();
+                return false;
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Failed to start watching directory: {Path}", fullPath);
+                return false;
+            }
         }
     }
 
@@ -88,15 +103,34 @@ public class FileWatcherService(ILogger<FileWatcherService> logger) : IDisposabl
 
         var fullPath = Path.GetFullPath(directoryPath);
 
-        if (_watchers.TryRemove(fullPath, out var watcher))
+        lock (_watcherLock)
         {
-            watcher.EnableRaisingEvents = false;
-            watcher.Created -= OnCreated;
-            watcher.Deleted -= OnDeleted;
-            watcher.Renamed -= OnRenamed;
-            watcher.Error -= OnError;
-            watcher.Dispose();
-            logger.LogInformation("Stopped watching directory: {Path}", fullPath);
+            // Serialize ref-count decrement and watcher removal to avoid disposing a watcher
+            // that another thread just incremented.
+            if (_disposed) return;
+
+            if (_watchers.TryGetValue(fullPath, out _))
+            {
+                var remaining = _watcherRefCounts.TryGetValue(fullPath, out var count) ? Math.Max(count - 1, 0) : 0;
+                if (remaining > 0)
+                {
+                    _watcherRefCounts[fullPath] = remaining;
+                    return;
+                }
+
+                _watcherRefCounts.TryRemove(fullPath, out _);
+
+                if (_watchers.TryRemove(fullPath, out var watcher))
+                {
+                    watcher.EnableRaisingEvents = false;
+                    watcher.Created -= OnCreated;
+                    watcher.Deleted -= OnDeleted;
+                    watcher.Renamed -= OnRenamed;
+                    watcher.Error -= OnError;
+                    watcher.Dispose();
+                    logger.LogInformation("Stopped watching directory: {Path}", fullPath);
+                }
+            }
         }
     }
 
@@ -106,6 +140,7 @@ public class FileWatcherService(ILogger<FileWatcherService> logger) : IDisposabl
     public bool IsWatching(string directoryPath)
     {
         if (string.IsNullOrWhiteSpace(directoryPath)) return false;
+        if (_disposed) return false;
         var fullPath = Path.GetFullPath(directoryPath);
         return _watchers.ContainsKey(fullPath);
     }
@@ -116,8 +151,7 @@ public class FileWatcherService(ILogger<FileWatcherService> logger) : IDisposabl
         {
             var parentPath = Path.GetDirectoryName(e.FullPath) ?? string.Empty;
             var rootPath = GetWatcherRootPath(sender);
-
-            logger.LogDebug("File created: {Path}", e.FullPath);
+            
             MarkDirectoryDirty(rootPath, parentPath);
         }
         catch (Exception ex)
@@ -132,8 +166,7 @@ public class FileWatcherService(ILogger<FileWatcherService> logger) : IDisposabl
         {
             var parentPath = Path.GetDirectoryName(e.FullPath) ?? string.Empty;
             var rootPath = GetWatcherRootPath(sender);
-
-            logger.LogDebug("File deleted: {Path}", e.FullPath);
+            
             MarkDirectoryDirty(rootPath, parentPath);
         }
         catch (Exception ex)
@@ -148,9 +181,7 @@ public class FileWatcherService(ILogger<FileWatcherService> logger) : IDisposabl
         {
             var parentPath = Path.GetDirectoryName(e.FullPath) ?? string.Empty;
             var rootPath = GetWatcherRootPath(sender);
-
-
-            logger.LogDebug("File renamed: {OldPath} -> {NewPath}", e.OldFullPath, e.FullPath);
+            
             MarkDirectoryDirty(rootPath, parentPath);
 
             var oldParent = Path.GetDirectoryName(e.OldFullPath) ?? string.Empty;
@@ -183,27 +214,36 @@ public class FileWatcherService(ILogger<FileWatcherService> logger) : IDisposabl
     private void MarkDirectoryDirty(string rootPath, string? directoryPath)
     {
         if (string.IsNullOrWhiteSpace(directoryPath)) return;
+        if (_disposed) return;
 
         var key = $"{rootPath}|{directoryPath}";
-        if (_directoryDebounceTokens.TryGetValue(key, out var existingCts))
-        {
-            existingCts.Cancel();
-            existingCts.Dispose();
-        }
-
         var cts = new CancellationTokenSource();
-        _directoryDebounceTokens[key] = cts;
+        // Atomically replace any existing token for this directory so only the newest
+        // change can fire (older tokens are canceled / disposed immediately).
+        _directoryDebounceTokens.AddOrUpdate(
+            key,
+            cts,
+            (_, existingCts) =>
+            {
+                existingCts.Cancel();
+                existingCts.Dispose();
+                return cts;
+            });
 
         _ = Task.Run(async () =>
         {
             try
             {
                 await Task.Delay(DirectoryDebounceMs, cts.Token);
-                if (!cts.Token.IsCancellationRequested)
+                if (!cts.Token.IsCancellationRequested && !_disposed)
                 {
-                    _directoryDebounceTokens.TryRemove(key, out _);
-                    DirectoryDirty?.Invoke(rootPath, directoryPath);
-                    logger.LogDebug("Directory dirty (debounced): {Dir}", directoryPath);
+                    // Only the active token is allowed to remove itself and notify, which
+                    // prevents a race where a stale token fires after a newer change.
+                    if (_directoryDebounceTokens.TryRemove(new KeyValuePair<string, CancellationTokenSource>(key, cts)))
+                    {
+                        DirectoryDirty?.Invoke(rootPath, directoryPath);
+                        logger.LogDebug("Directory dirty (debounced): {Dir}", directoryPath);
+                    }
                 }
             }
             catch (OperationCanceledException)
@@ -223,34 +263,41 @@ public class FileWatcherService(ILogger<FileWatcherService> logger) : IDisposabl
         GC.SuppressFinalize(this);
     }
 
-    protected virtual void Dispose(bool disposing)
+    private void Dispose(bool disposing)
     {
-        if (_disposed) return;
-
-        if (disposing)
+        lock (_watcherLock)
         {
-            foreach (var (_, cts) in _directoryDebounceTokens)
-            {
-                cts.Cancel();
-                cts.Dispose();
-            }
-            _directoryDebounceTokens.Clear();
-            foreach (var (path, watcher) in _watchers)
-            {
-                try
-                {
-                    watcher.EnableRaisingEvents = false;
-                    watcher.Dispose();
-                    logger.LogDebug("Disposed watcher for: {Path}", path);
-                }
-                catch (Exception ex)
-                {
-                    logger.LogError(ex, "Error disposing watcher for: {Path}", path);
-                }
-            }
-            _watchers.Clear();
-        }
+            if (_disposed) return;
 
-        _disposed = true;
+            if (disposing)
+            {
+                // Mark disposed before canceling tokens so event threads stop scheduling work.
+                _disposed = true;
+
+                foreach (var (_, cts) in _directoryDebounceTokens)
+                {
+                    cts.Cancel();
+                    cts.Dispose();
+                }
+                _directoryDebounceTokens.Clear();
+                foreach (var (path, watcher) in _watchers)
+                {
+                    try
+                    {
+                        watcher.EnableRaisingEvents = false;
+                        watcher.Dispose();
+                        logger.LogDebug("Disposed watcher for: {Path}", path);
+                    }
+                    catch (Exception ex)
+                    {
+                        logger.LogError(ex, "Error disposing watcher for: {Path}", path);
+                    }
+                }
+                _watchers.Clear();
+                _watcherRefCounts.Clear();
+            }
+
+            _disposed = true;
+        }
     }
 }

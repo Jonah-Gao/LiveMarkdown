@@ -44,6 +44,7 @@ for (const [category, extensions] of Object.entries(CATEGORY_MAP)) {
 const emit = defineEmits<{
     toggleFolder: [node: UIFileNode]
     openFile: [node: UIFileNode]
+    contextmenu: [event: MouseEvent, node: UIFileNode]
 }>()
 
 /**
@@ -55,6 +56,15 @@ function handleClick(node: UIFileNode): void {
     } else {
         emit('openFile', node)
     }
+}
+
+/**
+ * Handle right-click context menu.
+ */
+function handleContextMenu(event: MouseEvent, node: UIFileNode): void {
+    event.preventDefault()
+    event.stopPropagation()
+    emit('contextmenu', event, node)
 }
 
 /**
@@ -70,6 +80,7 @@ function getFileIcon(extension: string): string {
         <div
             class="file-node-content"
             @click="handleClick(node)"
+            @contextmenu="handleContextMenu($event, node)"
         >
             <span
                 v-if="node.isDirectory"
@@ -103,6 +114,7 @@ function getFileIcon(extension: string): string {
                 :node="child"
                 @toggle-folder="emit('toggleFolder', $event)"
                 @open-file="emit('openFile', $event)"
+                @contextmenu="emit('contextmenu', $event, child)"
             />
         </div>
     </div>
@@ -111,6 +123,7 @@ function getFileIcon(extension: string): string {
 <style scoped>
 .file-node {
     margin: 0;
+    contain: layout style;
 }
 
 .file-node-content {
@@ -119,9 +132,13 @@ function getFileIcon(extension: string): string {
     padding: 5px 8px 5px 12px;
     cursor: pointer;
     border-radius: 4px;
-    margin: 1px 4px;
     transition: background-color 0.1s ease;
     font-size: 13px;
+    line-height: 16px;
+    height: 26px;
+    box-sizing: border-box;
+    white-space: nowrap;
+    contain: layout style;
 }
 
 .file-node-content:hover {
@@ -134,36 +151,47 @@ function getFileIcon(extension: string): string {
 
 .folder-arrow {
     font-size: 16px;
+    width: 16px;
+    height: 16px;
+    line-height: 16px;
     margin-right: 2px;
     color: var(--text-muted);
     font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 16;
     flex-shrink: 0;
     transition: transform 0.15s ease;
+    text-align: center;
 }
 
 .folder-icon {
     font-size: 16px;
+    width: 16px;
+    height: 16px;
+    line-height: 16px;
     margin-right: 6px;
     color: var(--text-secondary);
     font-variation-settings: 'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 16;
     flex-shrink: 0;
+    text-align: center;
 }
 
 .file-icon {
     font-size: 16px;
+    width: 16px;
+    height: 16px;
+    line-height: 16px;
     margin-left: 18px;
     margin-right: 6px;
     color: var(--text-secondary);
     font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 16;
     flex-shrink: 0;
+    text-align: center;
 }
 
 .file-name {
     font-weight: 400;
     color: var(--text-primary);
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
+    flex-shrink: 0;
+    line-height: 16px;
 }
 
 .file-children {
