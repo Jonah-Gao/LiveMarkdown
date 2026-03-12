@@ -930,8 +930,8 @@ class Lexer {
                     type,
                     raw,
                     text: match![1],
-                    href: match![2],
-                    title: match![3],
+                    href: match![1],
+                    title: match![2],
                     tokens: this.parseInline(match![1]),
                 }, 0];
             case TokenType.AUTOLINK:
