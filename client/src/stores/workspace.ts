@@ -792,7 +792,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
         const normalizedPath = window.nodePath.normalize(dirPath)
         return new Promise<void>((resolve, reject) => {
             fileChangeQueue.push({dirPath: normalizedPath, resolve, reject});
-            // 触发处理（若未在跑则启动）
+            // handling
             void processQueue();
         });
     }
