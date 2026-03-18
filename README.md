@@ -5,16 +5,16 @@ CS NEA Project
 ### Compile and Hot-Reload for Development
 
 ```sh
-npm run dev
+cd Client && npm run dev
 ```
 
 ### Compile and Minify for Production
 
 ```sh
-npm run build
+cd Client && npm run build
 ```
 
 ### Testing
 ```sh
-npm run test
+cd Client && npm run test
 ```
