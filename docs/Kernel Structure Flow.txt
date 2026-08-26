@@ -1,0 +1,13 @@
+---
+config:
+  layout: dagre
+  theme: neutral
+---
+flowchart TB
+    Client["Electron+Vue Client"] -- SignalR (After Spawn) <--> Hubs["SignalR Hubs"]
+    Client -- Spawn --> Program["Program.cs (ASP.NET Core host)"]
+    Program --> Hubs
+    Hubs --> FileHub["FileHub"] & TerminalHub["TerminalHub"] & PythonHub["PythonHub"]
+    FileHub --> FileService["FileService"] & FileWatcherService["FileWatcherService"]
+    TerminalHub --> TerminalService["TerminalService"]
+    PythonHub --> PythonVenvRunner["PythonVenvRunner"]

@@ -1,0 +1,42 @@
+---
+config:
+  theme: neutral
+  htmlLabels: false
+  layout: elk
+---
+flowchart TB
+ subgraph MarkdownRenderer["Markdown Renderer Pipeline"]
+        Preprocessor["Preprocessor"]
+        Lexer["Lexer"]
+        Parser["Parser"]
+        RenderStage["Renderer"]
+  end
+ subgraph Components["UI Components"]
+        FileExplorer["File Explorer"]
+        Search["Search"]
+        Terminal["Terminal"]
+        Navigation["Navigation"]
+        Tabs["Tabs"]
+        Splash["Splash"]
+        Editor["Editor"]
+        Preview["Markdown Preview"]
+  end
+ subgraph SignalrServices["SignalR Services"]
+        FileService["File Service"]
+        PythonService["Python Service"]
+        TerminalService["Terminal Service"]
+  end
+    Main["Electron Main Process"] --> Preload["Preload Context Bridge"]
+    Preload --> Renderer["Vue Renderer"]
+    Renderer --> Components & Store["UI State Store"] & SignalrServices
+    Preprocessor --> Lexer
+    Lexer --> Parser
+    Parser --> RenderStage
+    SignalrServices --> Kernel["Kernel"]
+    Editor --> MarkdownRenderer
+    RenderStage --> Preview
+    Store <--> Components
+
+    style Components fill:transparent
+    style SignalrServices fill:transparent
+    style MarkdownRenderer fill:transparent
