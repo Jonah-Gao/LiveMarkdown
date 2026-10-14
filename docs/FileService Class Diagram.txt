@@ -1,0 +1,82 @@
+---
+config:
+  layout: dagre
+  theme: neutral
+  look: neo
+  htmlLabels: false
+  class:
+    hideEmptyMembersBox: true
+---
+classDiagram
+direction RL
+    class FileService {
+	    +StreamTabAsync()
+	    -StreamFileContentAsync()
+	    +ReadDirAsync()
+	    +CreateDirectory()
+	    +CreateFile()
+	    +DeleteDirectory()
+	    +DeleteFile()
+	    +MoveDirectory()
+	    +MoveFile()
+	    +CopyDirectory()
+	    +CopyFile()
+	    +SaveFileAsync()
+	    +SaveWorkspaceSettingsAsync()
+	    +LoadWorkspaceSettingsAsync()
+    }
+
+    class FileNode {
+	    +Name: string
+	    +Path: string
+	    +Extension: string
+	    +ParentPath: string
+	    +IsDirectory: bool
+	    +Expanded: bool
+    }
+
+    class TabChunk {
+	    +Id: string
+	    +Name: string
+	    +Path: string
+	    +Content: string
+	    +IsMetadata: bool
+	    +IsError: bool
+	    +Encoding: string
+    }
+
+    class ViewMode {
+	    Code
+	    Split
+	    Preview
+    }
+
+    class SidebarPanel {
+	    Explorer
+	    Search
+	    Terminal
+    }
+
+    class PanelLayout {
+	    +ExplorerWidth: double
+	    +TerminalHeight: double
+	    +EditorPreviewRatio: double
+	    +PreferredViewMode: ViewMode
+	    +OpenedFiles: string[]
+	    +ExpandedDirectories: string[]
+	    +ActiveFile: string
+	    +ExplorerVisible: bool
+	    +SearchVisible: bool
+	    +TerminalVisible: bool
+	    +ActiveTopPanel: SidebarPanel
+	    +ActiveBottomPanel: SidebarPanel
+    }
+
+	<<enumeration>> ViewMode
+	<<enumeration>> SidebarPanel
+
+    FileNode <.. FileService
+    TabChunk <.. FileService
+    PanelLayout <.. FileService
+    ViewMode <-- PanelLayout
+    PanelLayout --> SidebarPanel
